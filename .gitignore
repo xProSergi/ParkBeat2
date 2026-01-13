@@ -1,0 +1,36 @@
+# ===============================
+# Ignorar carpetas de Lambda, Layers, Pandas, Scipy y entornos virtuales
+# ===============================
+lambda*/
+layer*/
+pandas*/
+scipy*/
+venv*/
+
+# ===============================
+# Ignorar archivos .zip y .sh en la raíz
+# ===============================
+*.zip
+*.sh
+
+# ===============================
+# Ignorar archivos dentro de ParkBeat
+# ===============================
+ParkBeat/data/
+ParkBeat/docs/
+ParkBeat/models/
+ParkBeat/lambda_function.zip
+
+# ===============================
+# Ignorar caches y temporales de Python
+# ===============================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ===============================
+# Archivos de sistema
+# ===============================
+.DS_Store
+Thumbs.db

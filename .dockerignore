@@ -1,0 +1,32 @@
+# Excluir entornos virtuales
+venv/
+venv-linux/
+venv_linux/
+venv_linux_def/
+venv_linux_def/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Excluir archivos de desarrollo
+.git/
+.gitignore
+*.md
+*.txt
+!requirements.txt
+
+# Excluir datos y modelos locales (se cargan desde S3)
+data/
+models/
+historicos/
+
+# Excluir scripts
+scripts/
+*.sh
+
+# Excluir archivos temporales
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
