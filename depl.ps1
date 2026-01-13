@@ -2,7 +2,7 @@
 # Ahorra ~1 hora de trabajo manual
 
 $AWS_REGION = if ($env:AWS_REGION) { $env:AWS_REGION } else { "eu-west-3" }
-$API_NAME = if ($env:API_NAME) { $env:API_NAME } else { "parkbeat-api" }
+$API_NAME = if ($env:API_NAME) { $env:API_NAME } else { "parklytics-api" }
 $FUNCTION_NAME = if ($env:FUNCTION_NAME) { $env:FUNCTION_NAME } else { "parkbeat-predictor" }
 $STAGE_NAME = if ($env:STAGE_NAME) { $env:STAGE_NAME } else { "prod" }
 
@@ -94,9 +94,7 @@ Write-Host ""
 # 5. Dar permiso a API Gateway para invocar Lambda
 Write-Host "[5/12] Configurando permisos Lambda..." -ForegroundColor Cyan
 $accountId = ($functionArn -split ':')[4]
-
-# Este ARN debe coincidir con tu recurso y método exactos
-$sourceArn = "arn:aws:execute-api:${AWS_REGION}:${accountId}:${apiId}/*/POST/predict"
+$sourceArn = "arn:aws:execute-api:${AWS_REGION}:${accountId}:${apiId}/*/*"
 
 $statementId = "apigateway-invoke-$(Get-Date -Format 'yyyyMMddHHmmss')"
 aws lambda add-permission `
@@ -105,8 +103,14 @@ aws lambda add-permission `
     --action lambda:InvokeFunction `
     --principal apigateway.amazonaws.com `
     --source-arn $sourceArn `
-    --region $AWS_REGION
+    --region $AWS_REGION 2>$null | Out-Null
 
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "   Permiso agregado" -ForegroundColor Green
+} else {
+    Write-Host "   Permiso ya existe (OK)" -ForegroundColor Yellow
+}
+Write-Host ""
 
 # 6. Crear método POST
 Write-Host "[6/12] Creando método POST..." -ForegroundColor Cyan

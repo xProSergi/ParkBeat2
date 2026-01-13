@@ -1,1 +1,1 @@
-﻿https://qqu4oce21d.execute-api.eu-west-3.amazonaws.com/prod/predict
+﻿https://hok3cqu9h4.execute-api.eu-west-3.amazonaws.com/prod/predict

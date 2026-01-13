@@ -13,7 +13,7 @@ import json
 warnings.filterwarnings('ignore')
 
 # Configurar URL de la API (puedes usar variable de entorno o hardcodear)
-API_URL = os.getenv('API_URL', 'https://qqu4oce21d.execute-api.eu-west-3.amazonaws.com/prod/predict')
+API_URL = os.getenv('API_URL', 'https://hok3cqu9h4.execute-api.eu-west-3.amazonaws.com/prod/predict')
 
 def predict_wait_time_api(input_dict):
     """Llama a la API de Lambda para obtener predicción"""
