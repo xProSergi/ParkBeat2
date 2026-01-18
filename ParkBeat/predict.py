@@ -5,44 +5,117 @@
 import pandas as pd
 import numpy as np
 import joblib
-from datetime import datetime
 import os
-
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
-MODEL_PATH = os.path.join(MODELS_DIR, "xgb_model_professional.pkl")
+from datetime import datetime
 
 def load_model_artifacts():
     """Carga todos los artefactos necesarios para hacer predicciones"""
-    
-    model = joblib.load(MODEL_PATH)
-    scaler = joblib.load("models/xgb_scaler_professional.pkl")
-    encoding_maps = joblib.load("models/xgb_encoding_professional.pkl")
-    columnas_entrenamiento = joblib.load("models/xgb_columns_professional.pkl")
-    df_processed = joblib.load("models/df_processed.pkl")
-    
-    # Cargar históricos
-    hist_mes = joblib.load("models/hist_mes.pkl")
-    hist_hora = joblib.load("models/hist_hora.pkl")
-    hist_dia_semana = joblib.load("models/hist_dia_semana.pkl")
-    hist_mes_dia = joblib.load("models/hist_mes_dia.pkl")
-    hist_hora_dia = joblib.load("models/hist_hora_dia.pkl")
-    hist_mes_hora = joblib.load("models/hist_mes_hora.pkl")
-    
-    return {
-        "model": MODEL_PATH,
-        "scaler": scaler,
-        "encoding_maps": encoding_maps,
-        "columnas_entrenamiento": columnas_entrenamiento,
-        "df_processed": df_processed,
-        "hist_mes": hist_mes,
-        "hist_hora": hist_hora,
-        "hist_dia_semana": hist_dia_semana,
-        "hist_mes_dia": hist_mes_dia,
-        "hist_hora_dia": hist_hora_dia,
-        "hist_mes_hora": hist_mes_hora
-    }
+    try:
+        # Intentar cargar desde diferentes rutas posibles
+        model_paths = [
+            "../models/xgb_model_professional.pkl",
+            "models/xgb_model_professional.pkl",
+            "./models/xgb_model_professional.pkl"
+        ]
+        
+        model = None
+        scaler = None
+        encoding_maps = None
+        columnas_entrenamiento = None
+        df_processed = pd.DataFrame()
+        hist_mes = pd.DataFrame()
+        hist_hora = pd.DataFrame()
+        hist_dia_semana = pd.DataFrame()
+        hist_mes_dia = pd.DataFrame()
+        hist_hora_dia = pd.DataFrame()
+        hist_mes_hora = pd.DataFrame()
+        
+        # Buscar el primer path que exista
+        base_path = None
+        for path in model_paths:
+            if os.path.exists(path):
+                base_path = os.path.dirname(path)
+                break
+        
+        if base_path is None:
+            # No se encontraron archivos de modelo - retornar estructura vacía
+            # Esto permite que la app use listas de fallback
+            return {
+                "model": None,
+                "scaler": None,
+                "encoding_maps": {},
+                "columnas_entrenamiento": [],
+                "df_processed": df_processed,
+                "hist_mes": hist_mes,
+                "hist_hora": hist_hora,
+                "hist_dia_semana": hist_dia_semana,
+                "hist_mes_dia": hist_mes_dia,
+                "hist_hora_dia": hist_hora_dia,
+                "hist_mes_hora": hist_mes_hora
+            }
+        
+        # Cargar archivos desde el path encontrado
+        model = joblib.load(os.path.join(base_path, "xgb_model_professional.pkl"))
+        scaler = joblib.load(os.path.join(base_path, "xgb_scaler_professional.pkl"))
+        encoding_maps = joblib.load(os.path.join(base_path, "xgb_encoding_professional.pkl"))
+        columnas_entrenamiento = joblib.load(os.path.join(base_path, "xgb_columns_professional.pkl"))
+        df_processed = joblib.load(os.path.join(base_path, "df_processed.pkl"))
+        
+        # Cargar históricos (opcional - puede fallar sin problema)
+        try:
+            hist_mes = joblib.load(os.path.join(base_path, "hist_mes.pkl"))
+        except:
+            pass
+        try:
+            hist_hora = joblib.load(os.path.join(base_path, "hist_hora.pkl"))
+        except:
+            pass
+        try:
+            hist_dia_semana = joblib.load(os.path.join(base_path, "hist_dia_semana.pkl"))
+        except:
+            pass
+        try:
+            hist_mes_dia = joblib.load(os.path.join(base_path, "hist_mes_dia.pkl"))
+        except:
+            pass
+        try:
+            hist_hora_dia = joblib.load(os.path.join(base_path, "hist_hora_dia.pkl"))
+        except:
+            pass
+        try:
+            hist_mes_hora = joblib.load(os.path.join(base_path, "hist_mes_hora.pkl"))
+        except:
+            pass
+        
+        return {
+            "model": model,
+            "scaler": scaler,
+            "encoding_maps": encoding_maps,
+            "columnas_entrenamiento": columnas_entrenamiento,
+            "df_processed": df_processed,
+            "hist_mes": hist_mes,
+            "hist_hora": hist_hora,
+            "hist_dia_semana": hist_dia_semana,
+            "hist_mes_dia": hist_mes_dia,
+            "hist_hora_dia": hist_hora_dia,
+            "hist_mes_hora": hist_mes_hora
+        }
+    except Exception as e:
+        # Si falla la carga, retornar estructura vacía en lugar de lanzar error
+        # Esto permite que la app use listas de fallback
+        return {
+            "model": None,
+            "scaler": None,
+            "encoding_maps": {},
+            "columnas_entrenamiento": [],
+            "df_processed": pd.DataFrame(),
+            "hist_mes": pd.DataFrame(),
+            "hist_hora": pd.DataFrame(),
+            "hist_dia_semana": pd.DataFrame(),
+            "hist_mes_dia": pd.DataFrame(),
+            "hist_hora_dia": pd.DataFrame(),
+            "hist_mes_hora": pd.DataFrame()
+        }
 
 def parse_hora(hora_str):
     """Parsea la hora a formato numérico"""
