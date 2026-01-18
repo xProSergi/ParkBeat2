@@ -6,10 +6,17 @@ import pandas as pd
 import numpy as np
 import joblib
 from datetime import datetime
+import os
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+MODEL_PATH = os.path.join(MODELS_DIR, "xgb_model_professional.pkl")
 
 def load_model_artifacts():
     """Carga todos los artefactos necesarios para hacer predicciones"""
-    model = joblib.load("models/xgb_model_professional.pkl")
+    
+    model = joblib.load(MODEL_PATH)
     scaler = joblib.load("models/xgb_scaler_professional.pkl")
     encoding_maps = joblib.load("models/xgb_encoding_professional.pkl")
     columnas_entrenamiento = joblib.load("models/xgb_columns_professional.pkl")
@@ -24,7 +31,7 @@ def load_model_artifacts():
     hist_mes_hora = joblib.load("models/hist_mes_hora.pkl")
     
     return {
-        "model": model,
+        "model": MODEL_PATH,
         "scaler": scaler,
         "encoding_maps": encoding_maps,
         "columnas_entrenamiento": columnas_entrenamiento,

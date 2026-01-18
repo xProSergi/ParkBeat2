@@ -285,7 +285,7 @@ def render_sidebar():
             4. **Normalización** de escalas  
             5. **Validación** cruzada del modelo  
             
-            **Precisión del modelo:** >85% en predicciones
+            **Precisión del modelo:** >92% en predicciones
             """)
         
         st.markdown("---")
@@ -314,7 +314,7 @@ def main():
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    ## 🎯 Bienvenido a ParkBeat
+    ##  Bienvenido a ParkBeat
     
     Predice los tiempos de espera en las atracciones del Parque Warner Madrid con precisión. 
     Simplemente selecciona una atracción, la fecha y la hora de tu visita, y te mostraremos una 
@@ -390,7 +390,7 @@ def main():
     atracciones = get_attractions()
     zonas = get_zones()
 
-    st.markdown("## ⚙️ Configura tu predicción")
+    st.markdown("##  Configura tu predicción")
     
     col1, col2 = st.columns(2)
     
