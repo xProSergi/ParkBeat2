@@ -12,11 +12,11 @@ import json
 
 warnings.filterwarnings('ignore')
 
-# Configurar URL de la API (puedes usar variable de entorno o hardcodear)
+
 API_URL = os.getenv('API_URL', 'https://hok3cqu9h4.execute-api.eu-west-3.amazonaws.com/prod/predict')
 
 def predict_wait_time_api(input_dict):
-    """Llama a la API de Lambda para obtener predicción"""
+ 
     try:
         response = requests.post(
             API_URL,
@@ -134,7 +134,7 @@ st.markdown("""
 
 def render_hero():
     try:
-        hero_image_path = os.path.join("img", "fotoBatman.jpg")
+        hero_image_path = os.path.join("ParkBeat", "img", "fotoBatman.jpg")
         if os.path.exists(hero_image_path):
             hero_image = get_base64_image(hero_image_path)
 
