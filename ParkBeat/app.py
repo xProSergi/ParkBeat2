@@ -12,11 +12,11 @@ import json
 
 warnings.filterwarnings('ignore')
 
-
+# Configurar URL de la API (puedes usar variable de entorno o hardcodear)
 API_URL = os.getenv('API_URL', 'https://hok3cqu9h4.execute-api.eu-west-3.amazonaws.com/prod/predict')
 
 def predict_wait_time_api(input_dict):
- 
+    """Llama a la API de Lambda para obtener predicción"""
     try:
         response = requests.post(
             API_URL,
@@ -134,7 +134,10 @@ st.markdown("""
 
 def render_hero():
     try:
-        hero_image_path = os.path.join("ParkBeat", "img", "fotoBatman.jpg")
+        # Intentar diferentes rutas posibles para la imagen
+        hero_image_path = os.path.join("img", "fotoBatman.jpg")
+        if not os.path.exists(hero_image_path):
+            hero_image_path = os.path.join("ParkBeat", "img", "fotoBatman.jpg")
         if os.path.exists(hero_image_path):
             hero_image = get_base64_image(hero_image_path)
 
@@ -209,7 +212,7 @@ def render_hero():
 
 def render_sidebar():
     with st.sidebar:
-        st.title(" ParkBeat")
+        st.title("🎢 ParkBeat")
         st.markdown("---")
         
         try:
@@ -228,31 +231,31 @@ def render_sidebar():
         
         menu_option = st.radio(
             "",
-            ["Inicio", " ¿Qué es ParkBeat?", " ¿Por qué este proyecto?", " Acerca de los datos"],
+            ["Inicio", "🤔 ¿Qué es ParkBeat?", "💡 ¿Por qué este proyecto?", "📊 Acerca de los datos"],
             label_visibility="collapsed"
         )
         
         st.markdown("---")
         
-        if menu_option == " ¿Qué es ParkBeat?":
+        if menu_option == "🤔 ¿Qué es ParkBeat?":
             st.markdown("""
-            ###  ¿Qué es ParkBeat?
+            ### 🤔 ¿Qué es ParkBeat?
             
             **ParkBeat** es una plataforma de predicción inteligente de tiempos de espera para atracciones en **Parque Warner Madrid**.
             
             **Características principales:**
             
-             **Predicciones precisas** basadas en datos históricos  
-             **Factores meteorológicos** incluidos en el modelo  
-             **Análisis temporal** por fecha y hora específicas  
-             **Cobertura completa** de todas las atracciones  
+            ✅ **Predicciones precisas** basadas en datos históricos  
+            🌤️ **Factores meteorológicos** incluidos en el modelo  
+            ⏰ **Análisis temporal** por fecha y hora específicas  
+            🎢 **Cobertura completa** de todas las atracciones  
             
             **Objetivo:** Ayudar a los visitantes a planificar mejor su día en el parque y maximizar su experiencia.
             """)
             
-        elif menu_option == " ¿Por qué este proyecto?":
+        elif menu_option == "💡 ¿Por qué este proyecto?":
             st.markdown("""
-            ###  ¿Por qué este proyecto?
+            ### 💡 ¿Por qué este proyecto?
     
             Soy un apasionado de los parques temáticos desde que tengo memoria, y mejorar la experiencia del visitante, especialmente en aspectos como los tiempos de espera, es lo que realmente me inspira.  
             Desde 2007 (primera vez que visité el parque), Parque Warner ha sido una parte fundamental de mi vida. Podría decirse que he crecido junto a él, y con el tiempo, mi amor por el parque se ha fusionado con mi pasión por el análisis de datos, lo que ha dado lugar a la creación de ParkBeat.
@@ -266,9 +269,9 @@ def render_sidebar():
             - ☁️ **Modelos en producción** con AWS Lambda
             """)
             
-        elif menu_option == " Acerca de los datos":
+        elif menu_option == "📊 Acerca de los datos":
             st.markdown("""
-            ###  Acerca de los datos
+            ### 📊 Acerca de los datos
             
             **Fuente de datos:**
             
@@ -314,7 +317,7 @@ def main():
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    ##  Bienvenido a ParkBeat
+    ## 🎯 Bienvenido a ParkBeat
     
     Predice los tiempos de espera en las atracciones del Parque Warner Madrid con precisión. 
     Simplemente selecciona una atracción, la fecha y la hora de tu visita, y te mostraremos una 
@@ -325,12 +328,15 @@ def main():
     with st.spinner("Cargando datos..."):
         try:
             artifacts = load_model_artifacts()
-            if not artifacts or "error" in str(artifacts).lower():
-                st.warning("⚠️ No se pudieron cargar los artefactos locales. Las listas pueden estar limitadas.")
-                # Usar listas hardcodeadas como fallback
-                df = pd.DataFrame()
-            else:
+            if artifacts and isinstance(artifacts, dict) and "df_processed" in artifacts:
                 df = artifacts.get("df_processed", pd.DataFrame())
+                # Verificar que el DataFrame tiene datos y las columnas necesarias
+                if df.empty or "atraccion" not in df.columns or "zona" not in df.columns:
+                    st.warning("⚠️ Los datos cargados no tienen el formato esperado. Usando listas limitadas.")
+                    df = pd.DataFrame()
+            else:
+                st.warning("⚠️ No se pudieron cargar los artefactos locales. Las listas pueden estar limitadas.")
+                df = pd.DataFrame()
         except Exception as e:
             st.warning(f"⚠️ No se pudieron cargar los artefactos locales: {str(e)}")
             df = pd.DataFrame()
@@ -390,7 +396,7 @@ def main():
     atracciones = get_attractions()
     zonas = get_zones()
 
-    st.markdown("##  Configura tu predicción")
+    st.markdown("## ⚙️ Configura tu predicción")
     
     col1, col2 = st.columns(2)
     
@@ -742,27 +748,10 @@ def main():
         
         ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
         
-        ### 📈 Estadísticas rápidas
+ 
         """)
         
-        if not df.empty:
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Atracciones disponibles", len(atracciones))
-            
-            with col2:
-                st.metric("Zonas del parque", len(zonas))
-            
-            with col3:
-                st.metric("Registros históricos", f"{len(df):,}")
-        else:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Atracciones disponibles", len(atracciones))
-            with col2:
-                st.metric("Zonas del parque", len(zonas))
-
+       
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: var(--text-color); opacity: 0.7; padding: 1.5rem 0;">
