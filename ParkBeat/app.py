@@ -689,9 +689,7 @@ def main():
                     
                     context_items = [
                         ("📅 Fin de semana", resultado.get('es_fin_de_semana', es_fin_semana)),
-                        ("🌉 Es puente", resultado.get('es_puente', False)),
-                        ("🔥 Hora pico", resultado.get('es_hora_pico', False)),
-                        ("🌿 Hora valle", resultado.get('es_hora_valle', False))
+                        ("🌉 Es puente", resultado.get('es_puente', False)),                 
                     ]
                     
                     cols = st.columns(2)
