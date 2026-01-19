@@ -12,11 +12,11 @@ import json
 
 warnings.filterwarnings('ignore')
 
-
-API_URL = os.getenv('API_URL', 'https://hok3cqu9h4.execute-api.eu-west-3.amazonaws.com/prod/predict')
+# Configurar URL de la API (puedes usar variable de entorno o hardcodear)
+API_URL = os.getenv('API_URL', 'https://TU_API_ID.execute-api.eu-west-3.amazonaws.com/prod/predict')
 
 def predict_wait_time_api(input_dict):
- 
+    """Llama a la API de Lambda para obtener predicción"""
     try:
         response = requests.post(
             API_URL,
@@ -134,7 +134,7 @@ st.markdown("""
 
 def render_hero():
     try:
-        hero_image_path = os.path.join("ParkBeat", "img", "fotoBatman.jpg")
+        hero_image_path = os.path.join("img", "fotoBatman.jpg")
         if os.path.exists(hero_image_path):
             hero_image = get_base64_image(hero_image_path)
 
@@ -209,7 +209,7 @@ def render_hero():
 
 def render_sidebar():
     with st.sidebar:
-        st.title(" ParkBeat")
+        st.title("🎢 ParkBeat")
         st.markdown("---")
         
         try:
@@ -228,31 +228,31 @@ def render_sidebar():
         
         menu_option = st.radio(
             "",
-            ["Inicio", " ¿Qué es ParkBeat?", " ¿Por qué este proyecto?", " Acerca de los datos"],
+            ["Inicio", "🤔 ¿Qué es ParkBeat?", "💡 ¿Por qué este proyecto?", "📊 Acerca de los datos"],
             label_visibility="collapsed"
         )
         
         st.markdown("---")
         
-        if menu_option == " ¿Qué es ParkBeat?":
+        if menu_option == "🤔 ¿Qué es ParkBeat?":
             st.markdown("""
-            ###  ¿Qué es ParkBeat?
+            ### 🤔 ¿Qué es ParkBeat?
             
             **ParkBeat** es una plataforma de predicción inteligente de tiempos de espera para atracciones en **Parque Warner Madrid**.
             
             **Características principales:**
             
-             **Predicciones precisas** basadas en datos históricos  
-             **Factores meteorológicos** incluidos en el modelo  
-             **Análisis temporal** por fecha y hora específicas  
-             **Cobertura completa** de todas las atracciones  
+            ✅ **Predicciones precisas** basadas en datos históricos  
+            🌤️ **Factores meteorológicos** incluidos en el modelo  
+            ⏰ **Análisis temporal** por fecha y hora específicas  
+            🎢 **Cobertura completa** de todas las atracciones  
             
             **Objetivo:** Ayudar a los visitantes a planificar mejor su día en el parque y maximizar su experiencia.
             """)
             
-        elif menu_option == " ¿Por qué este proyecto?":
+        elif menu_option == "💡 ¿Por qué este proyecto?":
             st.markdown("""
-            ###  ¿Por qué este proyecto?
+            ### 💡 ¿Por qué este proyecto?
     
             Soy un apasionado de los parques temáticos desde que tengo memoria, y mejorar la experiencia del visitante, especialmente en aspectos como los tiempos de espera, es lo que realmente me inspira.  
             Desde 2007 (primera vez que visité el parque), Parque Warner ha sido una parte fundamental de mi vida. Podría decirse que he crecido junto a él, y con el tiempo, mi amor por el parque se ha fusionado con mi pasión por el análisis de datos, lo que ha dado lugar a la creación de ParkBeat.
@@ -266,9 +266,9 @@ def render_sidebar():
             - ☁️ **Modelos en producción** con AWS Lambda
             """)
             
-        elif menu_option == " Acerca de los datos":
+        elif menu_option == "📊 Acerca de los datos":
             st.markdown("""
-            ###  Acerca de los datos
+            ### 📊 Acerca de los datos
             
             **Fuente de datos:**
             
@@ -285,7 +285,7 @@ def render_sidebar():
             4. **Normalización** de escalas  
             5. **Validación** cruzada del modelo  
             
-            **Precisión del modelo:** >92% en predicciones
+            **Precisión del modelo:** >85% en predicciones
             """)
         
         st.markdown("---")
@@ -314,7 +314,7 @@ def main():
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    ##  Bienvenido a ParkBeat
+    ## 🎯 Bienvenido a ParkBeat
     
     Predice los tiempos de espera en las atracciones del Parque Warner Madrid con precisión. 
     Simplemente selecciona una atracción, la fecha y la hora de tu visita, y te mostraremos una 
@@ -322,75 +322,38 @@ def main():
     """)
     
     # Cargar modelo SOLO para obtener listas de atracciones/zonas
-    with st.spinner("Cargando datos..."):
+    with st.spinner("Cargando modelo y datos..."):
         try:
             artifacts = load_model_artifacts()
             if not artifacts or "error" in str(artifacts).lower():
-                st.warning("⚠️ No se pudieron cargar los artefactos locales. Las listas pueden estar limitadas.")
-                # Usar listas hardcodeadas como fallback
-                df = pd.DataFrame()
-            else:
-                df = artifacts.get("df_processed", pd.DataFrame())
+                st.error("❌ Error al cargar el modelo. Por favor, verifica los archivos del modelo.")
+                st.stop()
+                
+            df = artifacts.get("df_processed", pd.DataFrame())
+            if df.empty:
+                st.error("❌ No se encontraron datos de entrenamiento.")
+                st.stop()
+                
         except Exception as e:
-            st.warning(f"⚠️ No se pudieron cargar los artefactos locales: {str(e)}")
-            df = pd.DataFrame()
+            st.error(f"❌ Error al cargar el modelo: {str(e)}")
+            st.stop()
 
     @st.cache_data
     def get_attractions():
-        if not df.empty and "atraccion" in df.columns:
-            return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
-        else:
-            # Lista fallback si no hay datos
-            return [
-                "Batman Gotham City Escape",
-                "Superman: La Atracción de Acero",
-                "La Venganza del Enigma",
-                "Stunt Fall",
-                "Coaster Express",
-                "Río Bravo",
-                "Correcaminos Bip, Bip",
-                "Tom & Jerry",
-                "Hotel Embrujado",
-                "Wild West Waterworks"
-            ]
+        return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
 
     @st.cache_data
     def get_zones():
-        if not df.empty and "zona" in df.columns:
-            return sorted(df["zona"].dropna().astype(str).unique().tolist())
-        else:
-            return [
-                "DC Super Heroes World",
-                "Old West Territory",
-                "Cartoon Village",
-                "Hollywood Boulevard",
-                "Medieval Territory"
-            ]
+        return sorted(df["zona"].dropna().astype(str).unique().tolist())
 
     def get_zone_for_attraction(attraction):
-        if not df.empty and "atraccion" in df.columns and "zona" in df.columns:
-            row = df[df["atraccion"] == attraction]
-            return row["zona"].iloc[0] if not row.empty else ""
-        else:
-            # Mapeo fallback
-            zone_map = {
-                "Batman Gotham City Escape": "DC Super Heroes World",
-                "Superman: La Atracción de Acero": "DC Super Heroes World",
-                "La Venganza del Enigma": "DC Super Heroes World",
-                "Stunt Fall": "Old West Territory",
-                "Coaster Express": "Old West Territory",
-                "Río Bravo": "Old West Territory",
-                "Correcaminos Bip, Bip": "Cartoon Village",
-                "Tom & Jerry": "Cartoon Village",
-                "Hotel Embrujado": "Hollywood Boulevard",
-                "Wild West Waterworks": "Old West Territory"
-            }
-            return zone_map.get(attraction, "")
+        row = df[df["atraccion"] == attraction]
+        return row["zona"].iloc[0] if not row.empty else ""
 
     atracciones = get_attractions()
     zonas = get_zones()
 
-    st.markdown("##  Configura tu predicción")
+    st.markdown("## ⚙️ Configura tu predicción")
     
     col1, col2 = st.columns(2)
     
@@ -742,11 +705,9 @@ def main():
         
         ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
         
-        
+        ### 📈 Estadísticas rápidas
         """)
-        
-        
-
+      
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: var(--text-color); opacity: 0.7; padding: 1.5rem 0;">
