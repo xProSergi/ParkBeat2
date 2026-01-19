@@ -1,793 +1,870 @@
-import streamlit as st
+# ====================================================
+# SCRIPT DE PREDICCIÓN - USO DEL MODELO ENTRENADO
+# ====================================================
+
 import pandas as pd
 import numpy as np
-import base64
-from datetime import datetime, date, time, timedelta
-import plotly.graph_objects as go
-from predict import load_model_artifacts  # Solo para obtener listas de atracciones/zonas
-import warnings
+import joblib
 import os
-import requests
-import json
+from datetime import datetime
 
-warnings.filterwarnings('ignore')
-
-# Configurar URL de la API (puedes usar variable de entorno o hardcodear)
-API_URL = os.getenv('API_URL', 'https://hok3cqu9h4.execute-api.eu-west-3.amazonaws.com/prod/predict')
-
-def predict_wait_time_api(input_dict):
-    """Llama a la API de Lambda para obtener predicción"""
+def load_model_artifacts():
+    """Carga todos los artefactos necesarios para hacer predicciones"""
     try:
-        response = requests.post(
-            API_URL,
-            json=input_dict,
-            headers={'Content-Type': 'application/json'},
-            timeout=30
-        )
-        response.raise_for_status()
-        resultado = response.json()
+        # Intentar cargar desde diferentes rutas posibles
+        model_paths = [
+            "ParkBeat/models/xgb_model_professional.pkl",
+            "./ParkBeat/models/xgb_model_professional.pkl",
+            "../models/xgb_model_professional.pkl",
+            "models/xgb_model_professional.pkl",
+            "./models/xgb_model_professional.pkl"
+        ]
         
-        # Adaptar formato si es necesario (API Gateway a veces envuelve en 'body')
-        if isinstance(resultado, dict) and 'body' in resultado:
-            resultado = json.loads(resultado['body'])
+        model = None
+        scaler = None
+        encoding_maps = None
+        columnas_entrenamiento = None
+        df_processed = pd.DataFrame()
+        hist_mes = pd.DataFrame()
+        hist_hora = pd.DataFrame()
+        hist_dia_semana = pd.DataFrame()
+        hist_mes_dia = pd.DataFrame()
+        hist_hora_dia = pd.DataFrame()
+        hist_mes_hora = pd.DataFrame()
         
-        return resultado
-    except requests.exceptions.Timeout:
-        st.error("⏱️ Timeout: La API tardó demasiado en responder. Intenta de nuevo.")
-        return None
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Error al llamar a la API: {str(e)}")
-        st.info("💡 Verifica que la URL de la API sea correcta y que API Gateway esté desplegado.")
-        return None
-    except Exception as e:
-        st.error(f"❌ Error inesperado: {str(e)}")
-        return None
-
-def get_base64_image(image_path):
-    """Convierte una imagen a base64"""
-    with open(image_path, "rb") as img_file:
-        return base64.b64encode(img_file.read()).decode('utf-8')
-
-st.set_page_config(
-    page_title="ParkBeat — Predicción Parque Warner",
-    page_icon="img/logoParklytics.png",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.markdown("""
-<style>
-    /* Global Overrides */
-    html, body, #root, .stApp {
-        margin: 0 !important;
-        padding: 0 !important;
-        max-width: 100% !important;
-    }
-    
-    /* Main content container */
-    .main .block-container {
-        padding: 0 !important;
-        max-width: 100% !important;
-    }
-    
-    /* Hero Section */
-    .hero-container {
-        position: relative;
-        width: 100%;
-        overflow: hidden;
-        margin: 0;
-        padding: 0;
-    }
-    
-    .hero-content {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        width: 100%;
-        padding: 0 1rem;
-        z-index: 2;
-    }
-    
-    .hero-title {
-        font-size: 4.5rem;
-        font-weight: 800;
-        margin: 0;
-        color: #FF8C00;
-        text-shadow: 0 4px 12px rgba(0,0,0,0.9);
-        line-height: 1.1;
-    }
-    
-    .hero-subtitle {
-        font-size: 3rem;
-        margin: 2rem 0 0;
-        color: #FFD54F;
-        font-weight: 700;
-        text-shadow: 0 4px 18px rgba(0,0,0,0.85);
-        line-height: 1.4;
-        letter-spacing: 0.5px;
-    }
-    
-    /* Card Styles */
-    .card {
-        background-color: var(--background-color);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border: 1px solid var(--border-color);
-    }
-    
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .hero-title {
-            font-size: 3rem;
-        }
-        .hero-subtitle {
-            font-size: 1.8rem;
-            margin-top: 1rem;
-        }
-    }
-</style>
-""", unsafe_allow_html=True)
-
-def render_hero():
-    try:
-        # Intentar diferentes rutas posibles para la imagen
-        hero_image_path = os.path.join("img", "fotoBatman.jpg")
-        if not os.path.exists(hero_image_path):
-            hero_image_path = os.path.join("ParkBeat", "img", "fotoBatman.jpg")
-        if os.path.exists(hero_image_path):
-            hero_image = get_base64_image(hero_image_path)
-
-            st.markdown(f"""
-            <style>
-                .hero-container {{
-                    position: relative;
-                    width: 100%;
-                    height: 600px;
-                    background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.4)), 
-                                url("data:image/jpg;base64,{hero_image}") no-repeat center center;
-                    background-size: cover;
-                    overflow: hidden;
-                }}
-                
-                .hero-title {{
-                    font-size: 4.5rem;
-                    font-weight: 800;
-                    margin: 0;
-                    color: #FF8C00 !important;
-                    text-shadow: 0 4px 12px rgba(0,0,0,0.9);
-                    line-height: 1.1;
-                }}
-                
-                .hero-subtitle {{
-                    font-size: 3rem;
-                    margin: 2rem 0 0;
-                    color: #FFD54F !important;
-                    font-weight: 700;
-                    text-shadow: 0 4px 18px rgba(0,0,0,0.85);
-                    line-height: 1.4;
-                    letter-spacing: 0.5px;
-                }}
-                
-                @media (max-width: 768px) {{
-                    .hero-container {{
-                        height: 400px;
-                    }}
-                    .hero-title {{
-                        font-size: 3rem;
-                        color: #FF8C00 !important;
-                    }}
-                    .hero-subtitle {{
-                        font-size: 1.8rem;
-                        margin-top: 1rem;
-                        color: #FFD54F !important;
-                    }}
-                }}
-            </style>
-            
-            <div class="hero-container">
-                <div class="hero-content">
-                    <h1 class="hero-title">ParkBeat</h1>
-                    <p class="hero-subtitle">Predicción inteligente de tiempos de espera en Parque Warner</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        else:
-            st.markdown("""
-            <div style="text-align: center; padding: 2rem 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                <h1 style="color: #FF8C00 !important; margin: 0; font-size: 3rem; text-shadow: 0 4px 12px rgba(0,0,0,0.9);">
-                    ParkBeat
-                </h1>
-                <p style="color: #FFD54F !important; margin: 1rem 0 0; font-size: 2rem; font-weight: 700; text-shadow: 0 4px 14px rgba(0,0,0,0.85);">
-                    Predicción inteligente de tiempos de espera en Parque Warner
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-    except Exception as e:
-        st.warning(f"Error al cargar la imagen: {e}")
-
-def render_sidebar():
-    with st.sidebar:
-        st.title("🎢 ParkBeat")
-        st.markdown("---")
+        # Buscar el primer path que exista
+        base_path = None
+        for path in model_paths:
+            if os.path.exists(path):
+                base_path = os.path.dirname(path)
+                break
         
+        if base_path is None:
+            # No se encontraron archivos de modelo - retornar estructura vacía
+            # Esto permite que la app use listas de fallback
+            return {
+                "model": None,
+                "scaler": None,
+                "encoding_maps": {},
+                "columnas_entrenamiento": [],
+                "df_processed": df_processed,
+                "hist_mes": hist_mes,
+                "hist_hora": hist_hora,
+                "hist_dia_semana": hist_dia_semana,
+                "hist_mes_dia": hist_mes_dia,
+                "hist_hora_dia": hist_hora_dia,
+                "hist_mes_hora": hist_mes_hora
+            }
+        
+        # Cargar archivos desde el path encontrado
+        model = joblib.load(os.path.join(base_path, "xgb_model_professional.pkl"))
+        scaler = joblib.load(os.path.join(base_path, "xgb_scaler_professional.pkl"))
+        encoding_maps = joblib.load(os.path.join(base_path, "xgb_encoding_professional.pkl"))
+        columnas_entrenamiento = joblib.load(os.path.join(base_path, "xgb_columns_professional.pkl"))
+        df_processed = joblib.load(os.path.join(base_path, "df_processed.pkl"))
+        
+        # Cargar históricos (opcional - puede fallar sin problema)
         try:
-            logo_path = os.path.join("img", "logoParklytics.png")
-            if os.path.exists(logo_path):
-                logo_image = get_base64_image(logo_path)
-                st.markdown(f"""
-                <div style="text-align: center; margin: 1rem 0;">
-                    <img src="data:image/png;base64,{logo_image}" width="150" style="border-radius: 10px;">
-                </div>
-                """, unsafe_allow_html=True)
+            hist_mes = joblib.load(os.path.join(base_path, "hist_mes.pkl"))
+        except:
+            pass
+        try:
+            hist_hora = joblib.load(os.path.join(base_path, "hist_hora.pkl"))
+        except:
+            pass
+        try:
+            hist_dia_semana = joblib.load(os.path.join(base_path, "hist_dia_semana.pkl"))
+        except:
+            pass
+        try:
+            hist_mes_dia = joblib.load(os.path.join(base_path, "hist_mes_dia.pkl"))
+        except:
+            pass
+        try:
+            hist_hora_dia = joblib.load(os.path.join(base_path, "hist_hora_dia.pkl"))
+        except:
+            pass
+        try:
+            hist_mes_hora = joblib.load(os.path.join(base_path, "hist_mes_hora.pkl"))
         except:
             pass
         
-        st.markdown("### 📍 Navegación")
-        
-        menu_option = st.radio(
-            "",
-            ["Inicio", "🤔 ¿Qué es ParkBeat?", "💡 ¿Por qué este proyecto?", "📊 Acerca de los datos"],
-            label_visibility="collapsed"
-        )
-        
-        st.markdown("---")
-        
-        if menu_option == "🤔 ¿Qué es ParkBeat?":
-            st.markdown("""
-            ### 🤔 ¿Qué es ParkBeat?
-            
-            **ParkBeat** es una plataforma de predicción inteligente de tiempos de espera para atracciones en **Parque Warner Madrid**.
-            
-            **Características principales:**
-            
-            ✅ **Predicciones precisas** basadas en datos históricos  
-            🌤️ **Factores meteorológicos** incluidos en el modelo  
-            ⏰ **Análisis temporal** por fecha y hora específicas  
-            🎢 **Cobertura completa** de todas las atracciones  
-            
-            **Objetivo:** Ayudar a los visitantes a planificar mejor su día en el parque y maximizar su experiencia.
-            """)
-            
-        elif menu_option == "💡 ¿Por qué este proyecto?":
-            st.markdown("""
-            ### 💡 ¿Por qué este proyecto?
-    
-            Soy un apasionado de los parques temáticos desde que tengo memoria, y mejorar la experiencia del visitante, especialmente en aspectos como los tiempos de espera, es lo que realmente me inspira.  
-            Desde 2007 (primera vez que visité el parque), Parque Warner ha sido una parte fundamental de mi vida. Podría decirse que he crecido junto a él, y con el tiempo, mi amor por el parque se ha fusionado con mi pasión por el análisis de datos, lo que ha dado lugar a la creación de ParkBeat.
-    
-            **Las tecnologías que he utilizado son las siguientes:**
-    
-            - 🤖 **Machine Learning** con Python  
-            - 📊 **Análisis de datos** con Pandas y NumPy  
-            - 📈 **Visualización** con Plotly  
-            - 🚀 **Despliegue** con Streamlit  
-            - ☁️ **Modelos en producción** con AWS Lambda
-            """)
-            
-        elif menu_option == "📊 Acerca de los datos":
-            st.markdown("""
-            ### 📊 Acerca de los datos
-            
-            **Fuente de datos:**
-            
-            📥 - **Histórico** de tiempos de espera reales (Ingesta de datos mediante API Queue-Times) 
-            🌦️ - **Datos meteorológicos** en tiempo real  
-            🎢 - **Información** específica de cada atracción  
-          
-            
-            **Procesamiento:**
-            
-            1. **Limpieza** de datos inconsistentes  
-            2. **Transformación** de variables temporales  
-            3. **Feature engineering** para factores relevantes  
-            4. **Normalización** de escalas  
-            5. **Validación** cruzada del modelo  
-            
-            **Precisión del modelo:** >92% en predicciones
-            """)
-        
-        st.markdown("---")
-        
-        st.markdown("### 📧 Contacto")
-        st.markdown("""
-        **Desarrollador:** Sergio López  
-        **Versión:** 1.0  
-        **Estado:** En producción  
-
-        🔗 [LinkedIn](https://www.linkedin.com/in/sergio-lopez-dev/)         
-        📁 [Repositorio](https://github.com/xProSergi/ParkBeat) 
-        """)
-
-def main():
-    render_sidebar()
-    
-    render_hero()
-
-    st.markdown("""
-    <div style="background: #fff8e6; color: #5c3d00; padding: 1rem; border-radius: 12px; 
-                border-left: 4px solid #ffc107; margin-bottom: 2rem; margin-top: 3rem;">
-        <strong>⚠️ Aviso:</strong> Esta aplicación es independiente y educativa. 
-        No está afiliada a Parque Warner.
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    ## 🎯 Bienvenido a ParkBeat
-    
-    Predice los tiempos de espera en las atracciones del Parque Warner Madrid con precisión. 
-    Simplemente selecciona una atracción, la fecha y la hora de tu visita, y te mostraremos una 
-    estimación del tiempo de espera esperado.
-    """)
-    
-    # Cargar modelo SOLO para obtener listas de atracciones/zonas
-    with st.spinner("Cargando modelo y datos..."):
-        try:
-            artifacts = load_model_artifacts()
-            
-            # Verificar si artifacts es válido
-            if not artifacts:
-                st.warning("⚠️ No se pudieron cargar los artefactos. Usando listas limitadas.")
-                df = pd.DataFrame()
-            elif isinstance(artifacts, dict):
-                df = artifacts.get("df_processed", pd.DataFrame())
-                
-                # Verificar que el DataFrame tenga datos y las columnas necesarias
-                if df.empty:
-                    st.warning("⚠️ No se encontraron datos de entrenamiento. Usando listas limitadas.")
-                    st.info("💡 Verifica que el modelo se haya entrenado correctamente y que los archivos estén en la ubicación correcta.")
-                elif "atraccion" not in df.columns or "zona" not in df.columns:
-                    st.warning(f"⚠️ El DataFrame no tiene las columnas necesarias. Usando listas limitadas.")
-                    st.info(f"💡 Columnas encontradas: {list(df.columns)}")
-                    df = pd.DataFrame()
-            else:
-                st.warning("⚠️ Los artefactos no tienen el formato esperado. Usando listas limitadas.")
-                df = pd.DataFrame()
-                
-        except Exception as e:
-            st.warning(f"⚠️ Error al cargar el modelo: {str(e)}")
-            st.info("💡 La aplicación continuará con listas limitadas de atracciones.")
-            df = pd.DataFrame()
-
-    @st.cache_data
-    def get_attractions():
-        if not df.empty and "atraccion" in df.columns:
-            return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
-        else:
-            # Lista fallback si no hay datos
-            return [
-                "Batman Gotham City Escape",
-                "Superman: La Atracción de Acero",
-                "La Venganza del Enigma",
-                "Stunt Fall",
-                "Coaster Express",
-                "Río Bravo",
-                "Correcaminos Bip, Bip",
-                "Tom & Jerry",
-                "Hotel Embrujado",
-                "Wild West Waterworks"
-            ]
-
-    @st.cache_data
-    def get_zones():
-        if not df.empty and "zona" in df.columns:
-            return sorted(df["zona"].dropna().astype(str).unique().tolist())
-        else:
-            return [
-                "DC Super Heroes World",
-                "Old West Territory",
-                "Cartoon Village",
-                "Hollywood Boulevard",
-                "Medieval Territory"
-            ]
-
-    def get_zone_for_attraction(attraction):
-        if not df.empty and "atraccion" in df.columns and "zona" in df.columns:
-            row = df[df["atraccion"] == attraction]
-            return row["zona"].iloc[0] if not row.empty else ""
-        else:
-            # Mapeo fallback
-            zone_map = {
-                "Batman Gotham City Escape": "DC Super Heroes World",
-                "Superman: La Atracción de Acero": "DC Super Heroes World",
-                "La Venganza del Enigma": "DC Super Heroes World",
-                "Stunt Fall": "Old West Territory",
-                "Coaster Express": "Old West Territory",
-                "Río Bravo": "Old West Territory",
-                "Correcaminos Bip, Bip": "Cartoon Village",
-                "Tom & Jerry": "Cartoon Village",
-                "Hotel Embrujado": "Hollywood Boulevard",
-                "Wild West Waterworks": "Old West Territory"
-            }
-            return zone_map.get(attraction, "")
-
-    atracciones = get_attractions()
-    zonas = get_zones()
-
-    st.markdown("## ⚙️ Configura tu predicción")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        with st.container():
-            st.markdown("### 🎢 Selecciona una atracción")
-            atraccion_seleccionada = st.selectbox(
-                "Elige una atracción de la lista",
-                options=atracciones,
-                index=0,
-                help="Selecciona la atracción que deseas consultar",
-                key="attraction_select"
-            )
-            
-            zona_auto = get_zone_for_attraction(atraccion_seleccionada)
-            if zona_auto:
-                st.info(f"📍 **Zona:** {zona_auto}")
-
-    with col2:
-        with st.container():
-            st.markdown("### 📅 Fecha y hora de visita")
-            
-            fecha_seleccionada = st.date_input(
-                "Selecciona la fecha",
-                value=date.today(),
-                min_value=date.today(),
-                format="DD/MM/YYYY",
-                key="date_input"
-            )
-            
-            hora_seleccionada = st.time_input(
-                "Hora de la visita",
-                value=time(14, 0), 
-                step=timedelta(minutes=15),
-                key="time_input"
-            )
-            
-            dia_semana_es = {
-                "Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
-                "Thursday": "Jueves", "Friday": "Viernes", 
-                "Saturday": "Sábado", "Sunday": "Domingo"
-            }
-            dia_nombre = fecha_seleccionada.strftime("%A")
-            es_fin_semana = fecha_seleccionada.weekday() >= 5
-            st.info(f"📆 **Día:** {dia_semana_es.get(dia_nombre, dia_nombre)} - {'Fin de semana' if es_fin_semana else 'Día laborable'}")
-
-    with st.expander("🌤️ Configurar condiciones meteorológicas (opcional)", expanded=False):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            temperatura = st.slider(
-                "Temperatura (°C)", 
-                min_value=-5, 
-                max_value=45, 
-                value=22,
-                help="Temperatura en grados Celsius",
-                key="temp_slider"
-            )
-            
-        with col2:
-            humedad = st.slider(
-                "Humedad (%)", 
-                min_value=0, 
-                max_value=100, 
-                value=60,
-                key="humidity_slider"
-            )
-
-        sensacion_termica = st.slider(
-            "Sensación térmica (°C)", 
-            min_value=-10, 
-            max_value=50, 
-            value=22,
-            key="feels_like_slider"
-        )
-
-        codigo_clima = st.selectbox(
-            "Condición meteorológica",
-            options=[1, 2, 3, 4, 5],
-            index=2,
-            format_func=lambda x: {
-                1: "☀️ Soleado - Excelente",
-                2: "⛅ Parcialmente nublado - Bueno",
-                3: "☁️ Nublado - Normal",
-                4: "🌧️ Lluvia ligera - Malo",
-                5: "⛈️ Lluvia fuerte/Tormenta - Muy malo"
-            }[x],
-            key="weather_select"
-        )
-
-    predecir = st.button(
-        "🚀 Calcular tiempo de espera",
-        type="primary",
-        use_container_width=True,
-        key="predict_button_main"
-    )
-
-    if predecir:
-        hora_str = hora_seleccionada.strftime("%H:%M:%S")
-        fecha_str = fecha_seleccionada.strftime("%Y-%m-%d")
-        
-        input_data = {
-            "atraccion": atraccion_seleccionada,
-            "zona": zona_auto,
-            "fecha": fecha_str,
-            "hora": hora_str,
-            "temperatura": temperatura,
-            "humedad": humedad,
-            "sensacion_termica": sensacion_termica,
-            "codigo_clima": codigo_clima
+        return {
+            "model": model,
+            "scaler": scaler,
+            "encoding_maps": encoding_maps,
+            "columnas_entrenamiento": columnas_entrenamiento,
+            "df_processed": df_processed,
+            "hist_mes": hist_mes,
+            "hist_hora": hist_hora,
+            "hist_dia_semana": hist_dia_semana,
+            "hist_mes_dia": hist_mes_dia,
+            "hist_hora_dia": hist_hora_dia,
+            "hist_mes_hora": hist_mes_hora
+        }
+    except Exception as e:
+        # Si falla la carga, retornar estructura vacía en lugar de lanzar error
+        # Esto permite que la app use listas de fallback
+        return {
+            "model": None,
+            "scaler": None,
+            "encoding_maps": {},
+            "columnas_entrenamiento": [],
+            "df_processed": pd.DataFrame(),
+            "hist_mes": pd.DataFrame(),
+            "hist_hora": pd.DataFrame(),
+            "hist_dia_semana": pd.DataFrame(),
+            "hist_mes_dia": pd.DataFrame(),
+            "hist_hora_dia": pd.DataFrame(),
+            "hist_mes_hora": pd.DataFrame()
         }
 
-        with st.spinner("🔮 Calculando predicción..."):
-            try:
-                resultado = predict_wait_time_api(input_data)
-                
-                if resultado is None:
-                    st.error("❌ No se pudo obtener la predicción. Verifica la conexión con la API.")
-                    st.stop()
-                
-                minutos_pred = resultado.get("minutos_predichos", 0)
-                
-                if minutos_pred < 15:
-                    gradient = "linear-gradient(135deg, #16a085 0%, #2ecc71 100%)"
-                    emoji, nivel = "🟢", "Bajo"
-                elif minutos_pred < 30:
-                    gradient = "linear-gradient(135deg, #f6d365 0%, #fda085 100%)"
-                    emoji, nivel = "🟡", "Moderado"
-                elif minutos_pred < 60:
-                    gradient = "linear-gradient(135deg, #f7971e 0%, #ffd200 100%)"
-                    emoji, nivel = "🟠", "Alto"
-                else:
-                    gradient = "linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%)"
-                    emoji, nivel = "🔴", "Muy Alto"
+def parse_hora(hora_str):
+    """Parsea la hora a formato numérico"""
+    try:
+        if pd.isna(hora_str):
+            return np.nan
+        if isinstance(hora_str, (int, float)):
+            return int(hora_str)
+        s = str(hora_str).strip()
+        if ":" in s:
+            parts = s.split(":")
+            hora = int(float(parts[0]))
+            minuto = int(float(parts[1])) if len(parts) > 1 else 0
+            return hora + minuto / 60.0
+        return int(float(s))
+    except:
+        return np.nan
 
-                st.markdown("## 📊 Resultados de la predicción")
-                
-                st.markdown(f"""
-                <div style="
-                    background-color: var(--background-color);
-                    border: 2px solid var(--border-color);
-                    border-radius: 15px;
-                    padding: 2rem;
-                    margin: 1rem 0;
-                    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-                ">
-                    <div style="
-                        text-align: center;
-                        padding: 1.5rem 1rem;
-                    ">
-                        <div style="
-                            font-size: 1.2rem;
-                            color: var(--text-color);
-                            margin-bottom: 0.5rem;
-                            font-weight: 500;
-                        ">
-                            {emoji} Tiempo de espera estimado
-                        </div>
-                        <div style="
-                            font-size: 4rem;
-                            font-weight: 800;
-                            margin: 0.5rem 0;
-                            background: {gradient};
-                            -webkit-background-clip: text;
-                            -webkit-text-fill-color: transparent;
-                            background-clip: text;
-                        ">
-                            {minutos_pred:.0f} min
-                        </div>
-                        <div style="
-                            font-size: 1.2rem;
-                            color: var(--text-color);
-                            opacity: 0.9;
-                            margin-top: 0.5rem;
-                        ">
-                            {nivel} • {atraccion_seleccionada}
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+def get_temporada(mes):
+    """Determina la temporada del año"""
+    if mes in [7, 8]:
+        return 3  # Muy Alta
+    elif mes in [10]:
+        return 3  # Muy Alta
+    elif mes in [4, 5, 6, 12]:
+        return 2  # Alta
+    elif mes in [3, 9, 11]:
+        return 1  # Media
+    else:
+        return 0  # Baja
 
-                tab1, tab2, tab3 = st.tabs(["📝 Información", "🔍 Contexto", "💡 Recomendaciones"])
+def es_festivo_espana(fecha):
+    """Detecta festivos en España"""
+    mes = fecha.month
+    dia = fecha.day
+    if mes == 1 and dia == 1: return 1  # Año Nuevo
+    if mes == 1 and dia == 6: return 1  # Reyes
+    if mes == 5 and dia == 1: return 1  # Día del Trabajo
+    if mes == 10 and dia == 12: return 1  # Día de la Hispanidad
+    if mes == 11 and dia == 1: return 1  # Todos los Santos
+    if mes == 12 and dia == 6: return 1  # Constitución
+    if mes == 12 and dia == 8: return 1  # Inmaculada
+    if mes == 12 and dia == 25: return 1  # Navidad
+    return 0
 
-                with tab1:
-                    st.markdown("### 📝 Información de la predicción")
-                    info_cols = st.columns(2)
-                    
-                    with info_cols[0]:
-                        st.markdown("#### 📅 Fecha y hora")
-                        dia_semana_result = resultado.get('dia_semana', dia_semana_es.get(dia_nombre, 'N/A'))
-                        st.markdown(f"""
-                        <div style="
-                            background-color: var(--background-color);
-                            border: 1px solid var(--border-color);
-                            border-radius: 12px;
-                            padding: 1.25rem;
-                            margin: 0.5rem 0;
-                        ">
-                            <p style="color: var(--text-color); margin: 0.5rem 0;">
-                                <strong>Día de la semana:</strong> {dia_semana_result}<br>
-                                <strong>Día del mes:</strong> {resultado.get('dia_mes', fecha_seleccionada.day)}<br>
-                                <strong>Hora seleccionada:</strong> {hora_seleccionada.strftime('%H:%M')}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with info_cols[1]:
-                        weather_emoji = {
-                            1: '☀️ Soleado',
-                            2: '⛅ Parcial',
-                            3: '☁️ Nublado',
-                            4: '🌧️ Lluvia',
-                            5: '⛈️ Tormenta'
-                        }.get(codigo_clima, 'N/A')
-                        
-                        st.markdown("#### 🌦️ Condiciones")
-                        st.markdown(f"""
-                        <div style="
-                            background-color: var(--background-color);
-                            border: 1px solid var(--border-color);
-                            border-radius: 12px;
-                            padding: 1.25rem;
-                            margin: 0.5rem 0;
-                        ">
-                            <p style="color: var(--text-color); margin: 0.5rem 0;">
-                                <strong>Temperatura:</strong> {temperatura}°C<br>
-                                <strong>Humedad:</strong> {humedad}%<br>
-                                <strong>Sensación térmica:</strong> {sensacion_termica}°C<br>
-                                <strong>Condición:</strong> {weather_emoji}
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
+def es_puente(fecha):
+    """Detecta si un día es parte de un puente (festivo + fin de semana cercano)"""
+    if es_festivo_espana(fecha):
+        return 1
+    dia_anterior = fecha - pd.Timedelta(days=1)
+    dia_siguiente = fecha + pd.Timedelta(days=1)
+    if fecha.weekday() == 4 and es_festivo_espana(dia_siguiente):  # Viernes antes de festivo
+        return 1
+    if fecha.weekday() == 0 and es_festivo_espana(dia_anterior):  # Lunes después de festivo
+        return 1
+    if fecha.weekday() == 6 and es_festivo_espana(dia_anterior):  # Domingo después de festivo (sábado)
+        return 1
+    return 0
 
-                with tab2:
-                    st.markdown("### 🔍 Contexto")
-                    
-                    context_items = [
-                        ("📅 Fin de semana", resultado.get('es_fin_de_semana', es_fin_semana)),
-                        ("🌉 Es puente", resultado.get('es_puente', False)),
-                        ("🔥 Hora pico", resultado.get('es_hora_pico', False)),
-                        ("🌿 Hora valle", resultado.get('es_hora_valle', False))
-                    ]
-                    
-                    cols = st.columns(2)
-                    for i, (label, value) in enumerate(context_items):
-                        with cols[i % 2]:
-                            st.markdown(f"""
-                            <div style="
-                                background-color: var(--background-color);
-                                border: 1px solid var(--border-color);
-                                border-radius: 12px;
-                                padding: 1rem;
-                                margin: 0.5rem 0;
-                            ">
-                                <div style="
-                                    display: flex;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                ">
-                                    <span style="color: var(--text-color);">{label}</span>
-                                    <span style="
-                                        color: {'#16a085' if value else 'var(--text-color)'};
-                                        font-weight: 600;
-                                        opacity: {1 if value else 0.7};
-                                    ">
-                                        {'Sí' if value else 'No'}
-                                    </span>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+def prepare_input_for_prediction(input_dict, artifacts):
+    """Prepara un input para predicción aplicando todo el feature engineering"""
+    df_train = artifacts["df_processed"]
+    scaler = artifacts["scaler"]
+    encoding_maps = artifacts["encoding_maps"]
+    columnas_entrenamiento = artifacts["columnas_entrenamiento"]
+    hist_mes = artifacts["hist_mes"]
+    hist_hora = artifacts["hist_hora"]
+    hist_dia_semana = artifacts["hist_dia_semana"]
+    hist_mes_dia = artifacts["hist_mes_dia"]
+    hist_hora_dia = artifacts["hist_hora_dia"]
+    hist_mes_hora = artifacts["hist_mes_hora"]
+    
+    # Parsear fecha
+    fecha = pd.to_datetime(input_dict["fecha"], errors="coerce")
+    if pd.isna(fecha):
+        fecha = pd.Timestamp.now()
+    
+    # Parsear hora
+    hora_str = input_dict.get("hora", "12:00:00")
+    hora = parse_hora(hora_str)
+    if pd.isna(hora):
+        hora = 12.0
+    
+    # Features temporales
+    mes = fecha.month
+    dia_mes = fecha.day
+    dia_semana_num = fecha.weekday()
+    semana_año = fecha.isocalendar().week
+    trimestre = fecha.quarter
+    año = fecha.year
+    
+    # Días de semana
+    es_lunes = 1 if dia_semana_num == 0 else 0
+    es_martes = 1 if dia_semana_num == 1 else 0
+    es_miercoles = 1 if dia_semana_num == 2 else 0
+    es_jueves = 1 if dia_semana_num == 3 else 0
+    es_viernes = 1 if dia_semana_num == 4 else 0
+    es_sabado = 1 if dia_semana_num == 5 else 0
+    es_domingo = 1 if dia_semana_num == 6 else 0
+    es_fin_de_semana = 1 if dia_semana_num in [5, 6] else 0
+    es_dia_laborable = 1 if dia_semana_num in [0, 1, 2, 3, 4] else 0
+    
+    # Features de HORA DEL DÍA
+    hora_int = int(hora)
+    es_hora_apertura = 1 if (hora_int >= 10 and hora_int < 11) else 0
+    es_hora_pico = 1 if (hora_int >= 11 and hora_int <= 16) else 0
+    es_hora_valle_manana = 1 if hora_int < 10 else 0
+    es_hora_valle_tarde = 1 if hora_int > 18 else 0
+    es_hora_valle = 1 if (es_hora_valle_manana or es_hora_valle_tarde) else 0
+    
+    # Features de PUENTES/FESTIVOS
+    es_festivo_val = es_festivo_espana(fecha)
+    es_puente_val = es_puente(fecha)
+    
+    # Interacciones con hora y puentes
+    hora_apertura_fin_semana = es_hora_apertura * es_fin_de_semana
+    hora_pico_puente = es_hora_pico * es_puente_val
+    puente_fin_semana = es_puente_val * es_fin_de_semana
+    
+    # Meses
+    es_mes_dict = {i: 1 if mes == i else 0 for i in range(1, 13)}
+    
+    # Temporada
+    temporada = get_temporada(mes)
+    
+    # Features cíclicas
+    hora_sin = np.sin(2 * np.pi * hora / 24)
+    hora_cos = np.cos(2 * np.pi * hora / 24)
+    mes_sin = np.sin(2 * np.pi * mes / 12)
+    mes_cos = np.cos(2 * np.pi * mes / 12)
+    dia_semana_sin = np.sin(2 * np.pi * dia_semana_num / 7)
+    dia_semana_cos = np.cos(2 * np.pi * dia_semana_num / 7)
+    dia_mes_sin = np.sin(2 * np.pi * dia_mes / 31)
+    dia_mes_cos = np.cos(2 * np.pi * dia_mes / 31)
+    semana_año_sin = np.sin(2 * np.pi * semana_año / 52)
+    semana_año_cos = np.cos(2 * np.pi * semana_año / 52)
+    
+    # Interacciones
+    hora_mes = hora * mes
+    hora_dia_semana = hora * dia_semana_num
+    mes_dia_semana = mes * dia_semana_num
+    fin_semana_mes = es_fin_de_semana * mes
+    temporada_dia_semana = temporada * dia_semana_num
+    
+    # Clima
+    temperatura = input_dict.get("temperatura", df_train["temperatura"].median() if "temperatura" in df_train.columns else 20)
+    humedad = input_dict.get("humedad", df_train["humedad"].median() if "humedad" in df_train.columns else 60)
+    sensacion_termica = input_dict.get("sensacion_termica", temperatura)
+    codigo_clima = input_dict.get("codigo_clima", 3)
+    es_buen_clima = 1 if codigo_clima in [1, 2, 3] else 0
+    es_mal_clima = 1 if codigo_clima > 3 else 0
+    
+    # Atracción y zona
+    atraccion = input_dict.get("atraccion", "")
+    zona = input_dict.get("zona", "")
+    
+    # Features históricas
+    global_median = df_train["tiempo_espera"].median()
+    global_mean = df_train["tiempo_espera"].mean()
+    
+    hist_mes_row = hist_mes[(hist_mes["atraccion"] == atraccion) & (hist_mes["mes"] == mes)]
+    hist_hora_row = hist_hora[(hist_hora["atraccion"] == atraccion) & (hist_hora["hora"] == int(hora))]
+    hist_dia_row = hist_dia_semana[(hist_dia_semana["atraccion"] == atraccion) & (hist_dia_semana["dia_semana_num"] == dia_semana_num)]
+    hist_mes_dia_row = hist_mes_dia[(hist_mes_dia["atraccion"] == atraccion) & (hist_mes_dia["mes"] == mes) & (hist_mes_dia["dia_semana_num"] == dia_semana_num)]
+    hist_hora_dia_row = hist_hora_dia[(hist_hora_dia["atraccion"] == atraccion) & (hist_hora_dia["hora"] == int(hora)) & (hist_hora_dia["dia_semana_num"] == dia_semana_num)]
+    hist_mes_hora_row = hist_mes_hora[(hist_mes_hora["atraccion"] == atraccion) & (hist_mes_hora["mes"] == mes) & (hist_mes_hora["hora"] == int(hora))]
+    
+    count_mes = hist_mes_row["count_mes"].values[0] if not hist_mes_row.empty else 0
+    mean_mes = hist_mes_row["mean_mes"].values[0] if not hist_mes_row.empty else global_mean
+    median_mes = hist_mes_row["median_mes"].values[0] if not hist_mes_row.empty else global_median
+    std_mes = hist_mes_row["std_mes"].values[0] if not hist_mes_row.empty else df_train["tiempo_espera"].std()
+    p75_mes = hist_mes_row["p75_mes"].values[0] if not hist_mes_row.empty else np.percentile(df_train["tiempo_espera"], 75)
+    p90_mes = hist_mes_row["p90_mes"].values[0] if not hist_mes_row.empty else np.percentile(df_train["tiempo_espera"], 90)
+    p95_mes = hist_mes_row["p95_mes"].values[0] if not hist_mes_row.empty else np.percentile(df_train["tiempo_espera"], 95)
+    
+    count_hora = hist_hora_row["count_hora"].values[0] if not hist_hora_row.empty else 0
+    mean_hora = hist_hora_row["mean_hora"].values[0] if not hist_hora_row.empty else global_mean
+    median_hora = hist_hora_row["median_hora"].values[0] if not hist_hora_row.empty else global_median
+    std_hora = hist_hora_row["std_hora"].values[0] if not hist_hora_row.empty else df_train["tiempo_espera"].std()
+    p75_hora = hist_hora_row["p75_hora"].values[0] if not hist_hora_row.empty else np.percentile(df_train["tiempo_espera"], 75)
+    p90_hora = hist_hora_row["p90_hora"].values[0] if not hist_hora_row.empty else np.percentile(df_train["tiempo_espera"], 90)
+    
+    count_dia = hist_dia_row["count_dia"].values[0] if not hist_dia_row.empty else 0
+    mean_dia = hist_dia_row["mean_dia"].values[0] if not hist_dia_row.empty else global_mean
+    median_dia = hist_dia_row["median_dia"].values[0] if not hist_dia_row.empty else global_median
+    std_dia = hist_dia_row["std_dia"].values[0] if not hist_dia_row.empty else df_train["tiempo_espera"].std()
+    p75_dia = hist_dia_row["p75_dia"].values[0] if not hist_dia_row.empty else np.percentile(df_train["tiempo_espera"], 75)
+    p90_dia = hist_dia_row["p90_dia"].values[0] if not hist_dia_row.empty else np.percentile(df_train["tiempo_espera"], 90)
+    
+    count_mes_dia = hist_mes_dia_row["count_mes_dia"].values[0] if not hist_mes_dia_row.empty else 0
+    mean_mes_dia = hist_mes_dia_row["mean_mes_dia"].values[0] if not hist_mes_dia_row.empty else global_mean
+    median_mes_dia = hist_mes_dia_row["median_mes_dia"].values[0] if not hist_mes_dia_row.empty else global_median
+    p75_mes_dia = hist_mes_dia_row["p75_mes_dia"].values[0] if not hist_mes_dia_row.empty else np.percentile(df_train["tiempo_espera"], 75)
+    p90_mes_dia = hist_mes_dia_row["p90_mes_dia"].values[0] if not hist_mes_dia_row.empty else np.percentile(df_train["tiempo_espera"], 90)
+    
+    count_hora_dia = hist_hora_dia_row["count_hora_dia"].values[0] if not hist_hora_dia_row.empty else 0
+    mean_hora_dia = hist_hora_dia_row["mean_hora_dia"].values[0] if not hist_hora_dia_row.empty else global_mean
+    median_hora_dia = hist_hora_dia_row["median_hora_dia"].values[0] if not hist_hora_dia_row.empty else global_median
+    p75_hora_dia = hist_hora_dia_row["p75_hora_dia"].values[0] if not hist_hora_dia_row.empty else np.percentile(df_train["tiempo_espera"], 75)
+    
+    count_mes_hora = hist_mes_hora_row["count_mes_hora"].values[0] if not hist_mes_hora_row.empty else 0
+    mean_mes_hora = hist_mes_hora_row["mean_mes_hora"].values[0] if not hist_mes_hora_row.empty else global_mean
+    median_mes_hora = hist_mes_hora_row["median_mes_hora"].values[0] if not hist_mes_hora_row.empty else global_median
+    p75_mes_hora = hist_mes_hora_row["p75_mes_hora"].values[0] if not hist_mes_hora_row.empty else np.percentile(df_train["tiempo_espera"], 75)
+    
+    # Flags especiales
+    is_batman_octubre = 1 if ("Batman" in atraccion and mes == 10) else 0
+    is_octubre = 1 if mes == 10 else 0
+    is_noviembre = 1 if mes == 11 else 0
+    is_octubre_fin_semana = 1 if (mes == 10 and es_fin_de_semana == 1) else 0
+    is_noviembre_fin_semana = 1 if (mes == 11 and es_fin_de_semana == 1) else 0
+    
+    # Encoding categórico
+    zona_enc = encoding_maps.get("zona", {}).get(zona, global_mean) if "zona" in encoding_maps else global_mean
+    atraccion_enc = encoding_maps.get("atraccion", {}).get(atraccion, global_mean) if "atraccion" in encoding_maps else global_mean
+    
+    # Construir el vector de features
+    feature_dict = {
+        "hora": hora,
+        "mes": mes,
+        "dia_mes": dia_mes,
+        "dia_semana_num": dia_semana_num,
+        "semana_año": semana_año,
+        "trimestre": trimestre,
+        "año": año,
+        "es_lunes": es_lunes,
+        "es_martes": es_martes,
+        "es_miercoles": es_miercoles,
+        "es_jueves": es_jueves,
+        "es_viernes": es_viernes,
+        "es_sabado": es_sabado,
+        "es_domingo": es_domingo,
+        "es_fin_de_semana": es_fin_de_semana,
+        "es_dia_laborable": es_dia_laborable,
+        **{f"es_mes_{i}": es_mes_dict[i] for i in range(1, 13)},
+        "temporada": temporada,
+        "hora_sin": hora_sin,
+        "hora_cos": hora_cos,
+        "mes_sin": mes_sin,
+        "mes_cos": mes_cos,
+        "dia_semana_sin": dia_semana_sin,
+        "dia_semana_cos": dia_semana_cos,
+        "dia_mes_sin": dia_mes_sin,
+        "dia_mes_cos": dia_mes_cos,
+        "semana_año_sin": semana_año_sin,
+        "semana_año_cos": semana_año_cos,
+        "hora_mes": hora_mes,
+        "hora_dia_semana": hora_dia_semana,
+        "mes_dia_semana": mes_dia_semana,
+        "fin_semana_mes": fin_semana_mes,
+        "temporada_dia_semana": temporada_dia_semana,
+        "temperatura": temperatura,
+        "humedad": humedad,
+        "sensacion_termica": sensacion_termica,
+        "codigo_clima": codigo_clima,
+        "es_buen_clima": es_buen_clima,
+        "es_mal_clima": es_mal_clima,
+        "count_mes": count_mes,
+        "mean_mes": mean_mes,
+        "median_mes": median_mes,
+        "std_mes": std_mes,
+        "p75_mes": p75_mes,
+        "p90_mes": p90_mes,
+        "p95_mes": p95_mes,
+        "count_hora": count_hora,
+        "mean_hora": mean_hora,
+        "median_hora": median_hora,
+        "std_hora": std_hora,
+        "p75_hora": p75_hora,
+        "p90_hora": p90_hora,
+        "count_dia": count_dia,
+        "mean_dia": mean_dia,
+        "median_dia": median_dia,
+        "std_dia": std_dia,
+        "p75_dia": p75_dia,
+        "p90_dia": p90_dia,
+        "count_mes_dia": count_mes_dia,
+        "mean_mes_dia": mean_mes_dia,
+        "median_mes_dia": median_mes_dia,
+        "p75_mes_dia": p75_mes_dia,
+        "p90_mes_dia": p90_mes_dia,
+        "count_hora_dia": count_hora_dia,
+        "mean_hora_dia": mean_hora_dia,
+        "median_hora_dia": median_hora_dia,
+        "p75_hora_dia": p75_hora_dia,
+        "count_mes_hora": count_mes_hora,
+        "mean_mes_hora": mean_mes_hora,
+        "median_mes_hora": median_mes_hora,
+        "p75_mes_hora": p75_mes_hora,
+        "is_batman_octubre": is_batman_octubre,
+        "is_octubre": is_octubre,
+        "is_noviembre": is_noviembre,
+        "is_octubre_fin_semana": is_octubre_fin_semana,
+        "is_noviembre_fin_semana": is_noviembre_fin_semana,
+        "hora_int": hora_int,
+        "es_hora_apertura": es_hora_apertura,
+        "es_hora_pico": es_hora_pico,
+        "es_hora_valle_manana": es_hora_valle_manana,
+        "es_hora_valle_tarde": es_hora_valle_tarde,
+        "es_hora_valle": es_hora_valle,
+        "es_festivo": es_festivo_val,
+        "es_puente": es_puente_val,
+        "hora_apertura_fin_semana": hora_apertura_fin_semana,
+        "hora_pico_puente": hora_pico_puente,
+        "puente_fin_semana": puente_fin_semana,
+        "zona_enc": zona_enc,
+        "atraccion_enc": atraccion_enc,
+    }
+    
+    # Añadir frecuencias si existen
+    if "zona_freq" in columnas_entrenamiento:
+        zona_freq_map = df_train["zona"].value_counts().to_dict() if "zona" in df_train.columns else {}
+        feature_dict["zona_freq"] = zona_freq_map.get(zona, 0)
+    if "atraccion_freq" in columnas_entrenamiento:
+        atraccion_freq_map = df_train["atraccion"].value_counts().to_dict() if "atraccion" in df_train.columns else {}
+        feature_dict["atraccion_freq"] = atraccion_freq_map.get(atraccion, 0)
+    
+    # Crear DataFrame y asegurar el mismo orden de columnas
+    df_features = pd.DataFrame([feature_dict])
+    
+    # Asegurar que todas las columnas estén presentes
+    for col in columnas_entrenamiento:
+        if col not in df_features.columns:
+            df_features[col] = 0
+    
+    # Reordenar columnas
+    df_features = df_features[columnas_entrenamiento]
+    
+    # Escalar
+    X_scaled = scaler.transform(df_features)
+    
+    return X_scaled
 
-                    st.markdown("### 📊 Comparación de predicciones")
-                    valores = {
-                        "Predicción Final": minutos_pred,
-                        "Modelo Base": resultado.get('prediccion_raw', resultado.get('prediccion_base', minutos_pred)),
-                        "P75 Histórico": resultado.get('p75_historico', 0),
-                        "Mediana": resultado.get('median_historico', 0)
-                    }
-                    
-                    # Filtrar valores válidos
-                    valores = {k: v for k, v in valores.items() if v > 0}
-                    
-                    if valores:
-                        fig = go.Figure(go.Bar(
-                            x=list(valores.keys()),
-                            y=list(valores.values()),
-                            text=[f"{v:.1f} min" for v in valores.values()],
-                            textposition='auto',
-                            marker_color=['#6c63ff', '#4facfe', '#43e97b', '#f6d365'][:len(valores)]
-                        ))
-                        
-                        fig.update_layout(
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            height=400,
-                            margin=dict(t=20, b=20, l=20, r=20),
-                            yaxis_title="Minutos",
-                            xaxis_title="",
-                            showlegend=False,
-                            font=dict(color='var(--text-color)'),
-                            xaxis=dict(tickfont=dict(color='var(--text-color)')),
-                            yaxis=dict(gridcolor='var(--border-color)')
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-
-                with tab3:
-                    st.markdown("### 💡 Recomendaciones")
-                    
-                    recommendations = []
-                    
-                    if minutos_pred < 15:
-                        recommendations.append(("✅", "Excelente momento", 
-                            f"El tiempo de espera es bajo ({minutos_pred:.1f} min). Aprovecha para subir ahora."))
-                    elif minutos_pred < 30:
-                        recommendations.append(("👍", "Buen momento", 
-                            f"El tiempo de espera es moderado ({minutos_pred:.1f} min). Un buen momento para hacer cola."))
-                    elif minutos_pred < 60:
-                        recommendations.append(("⚠️", "Tiempo de espera alto", 
-                            f"El tiempo de espera es alto ({minutos_pred:.1f} min). Considera planificar para otro momento o usar acceso rápido si está disponible."))
-                    else:
-                        recommendations.append(("🚫", "Tiempo de espera muy alto", 
-                            f"El tiempo de espera es muy alto ({minutos_pred:.1f} min). Te recomendamos cambiar de atracción o volver en otro momento."))
-                    
-                    if resultado.get('es_hora_pico'):
-                        recommendations.append(("⏰", "Hora pico", 
-                            "Estás en horario de mayor afluencia (11:00-16:00). Las esperas suelen ser más largas."))
-                    
-                    if resultado.get('es_fin_de_semana', es_fin_semana):
-                        recommendations.append(("📅", "Fin de semana", 
-                            "Los fines de semana suelen tener más visitantes. Si puedes, considera visitar entre semana."))
-                    
-                    for emoji, title, text in recommendations:
-                        with st.expander(f"{emoji} {title}", expanded=True):
-                            st.markdown(f"<div style='padding: 0.5rem 0; color: var(--text-color);'>{text}</div>", unsafe_allow_html=True)
-
-            except Exception as e:
-                st.error(f"❌ Error al realizar la predicción: {str(e)}")
-                st.exception(e)  
-
-    if not predecir:
-        st.markdown("""
-        ## 🎯 ¿Cómo funciona?
+def predict_wait_time(input_dict, artifacts=None):
+    """
+    Función principal para predecir tiempo de espera.
+    
+    Args:
+        input_dict: Diccionario con los datos de entrada:
+            - fecha: "YYYY-MM-DD"
+            - hora: "HH:MM:SS" o "HH:MM"
+            - atraccion: nombre de la atracción
+            - zona: zona del parque
+            - temperatura: temperatura en grados
+            - humedad: humedad relativa
+            - sensacion_termica: sensación térmica
+            - codigo_clima: código del clima (1-5)
+        artifacts: Diccionario con los artefactos del modelo (opcional, se cargan si no se proporciona)
+    
+    Returns:
+        Diccionario con la predicción y detalles
+    """
+    if artifacts is None:
+        artifacts = load_model_artifacts()
+    
+    model = artifacts["model"]
+    df_train = artifacts["df_processed"]
+    
+    # Predicción base del modelo (ESTA ES LA CLAVE - tiene hora, día del mes, etc.)
+    X_pred = prepare_input_for_prediction(input_dict, artifacts)
+    pred_base = float(model.predict(X_pred)[0])
+    
+    # Extraer información del input
+    fecha = pd.to_datetime(input_dict["fecha"], errors="coerce")
+    if pd.isna(fecha):
+        fecha = pd.Timestamp.now()
+    
+    mes = fecha.month
+    dia_mes = fecha.day
+    dia_semana = fecha.weekday()
+    es_fin_de_semana = 1 if dia_semana in [5, 6] else 0
+    atr = input_dict.get("atraccion", "")
+    
+    # Parsear hora para obtener hora exacta
+    hora_str = input_dict.get("hora", "12:00:00")
+    hora = parse_hora(hora_str)
+    if pd.isna(hora):
+        hora = 12.0
+    hora_int = int(hora)
+    
+    # Usar históricos pre-calculados para verificar existencia, luego buscar en df_train
+    hist_mes = artifacts["hist_mes"]
+    hist_hora = artifacts["hist_hora"]
+    hist_dia_semana = artifacts["hist_dia_semana"]
+    hist_mes_dia = artifacts["hist_mes_dia"]
+    hist_hora_dia = artifacts["hist_hora_dia"]
+    hist_mes_hora = artifacts["hist_mes_hora"]
+    global_median = df_train["tiempo_espera"].median()
+    
+    # Verificar existencia en históricos pre-calculados
+    tiene_mes_hora_dia = not hist_mes_hora[(hist_mes_hora["atraccion"] == atr) & (hist_mes_hora["mes"] == mes) & (hist_mes_hora["hora"] == hora_int)].empty and \
+                         not hist_mes_dia[(hist_mes_dia["atraccion"] == atr) & (hist_mes_dia["mes"] == mes) & (hist_mes_dia["dia_semana_num"] == dia_semana)].empty
+    tiene_hora_dia = not hist_hora_dia[(hist_hora_dia["atraccion"] == atr) & (hist_hora_dia["hora"] == hora_int) & (hist_hora_dia["dia_semana_num"] == dia_semana)].empty
+    tiene_mes_hora = not hist_mes_hora[(hist_mes_hora["atraccion"] == atr) & (hist_mes_hora["mes"] == mes) & (hist_mes_hora["hora"] == hora_int)].empty
+    tiene_hora = not hist_hora[(hist_hora["atraccion"] == atr) & (hist_hora["hora"] == hora_int)].empty
+    
+    # Si no hay datos exactos por hora, buscar en rango cercano
+    if not tiene_hora and hora_int > 0:
+        for h in [hora_int-1, hora_int+1]:
+            if 0 <= h < 24:
+                if not hist_hora[(hist_hora["atraccion"] == atr) & (hist_hora["hora"] == h)].empty:
+                    hora_int = h
+                    tiene_hora = True
+                    break
+    
+    # PRIORIZAR históricos que incluyen HORA - buscar directamente en df_train
+    if tiene_mes_hora_dia:
+        # Lo más específico: mes + hora + día de semana
+        hist_ref = df_train[(df_train["atraccion"] == atr) & (df_train["mes"] == mes) & (df_train["hora"].astype(int) == hora_int) & (df_train["dia_semana_num"] == dia_semana)]
+        especificidad = "mes_hora_dia"
+    elif tiene_hora_dia:
+        # Hora + día de semana
+        hist_ref = df_train[(df_train["atraccion"] == atr) & (df_train["hora"].astype(int) == hora_int) & (df_train["dia_semana_num"] == dia_semana)]
+        especificidad = "hora_dia"
+    elif tiene_mes_hora:
+        # Mes + hora
+        hist_ref = df_train[(df_train["atraccion"] == atr) & (df_train["mes"] == mes) & (df_train["hora"].astype(int) == hora_int)]
+        especificidad = "mes_hora"
+    elif tiene_hora:
+        # Solo hora (muy importante para variación horaria)
+        hist_ref = df_train[(df_train["atraccion"] == atr) & (df_train["hora"].astype(int) == hora_int)]
+        especificidad = "hora"
+    else:
+        # Buscar sin hora
+        hist_mes_dia_ref = df_train[(df_train["atraccion"] == atr) & (df_train["mes"] == mes) & (df_train["dia_semana_num"] == dia_semana)]
+        hist_dia_ref = df_train[(df_train["atraccion"] == atr) & (df_train["dia_semana_num"] == dia_semana)]
+        hist_mes_ref = df_train[(df_train["atraccion"] == atr) & (df_train["mes"] == mes)]
         
-        1. **Selecciona una atracción** de la lista desplegable
-        2. **Elige la fecha y hora** de tu visita
-        3. **Ajusta las condiciones meteorológicas** si lo deseas
-        4. Haz clic en **Calcular tiempo de espera**
-        
-        ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
-        
-        ### 📈 Estadísticas rápidas
-        """)
-        
-        if not df.empty:
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Atracciones disponibles", len(atracciones))
-            
-            with col2:
-                st.metric("Zonas del parque", len(zonas))
-            
-            with col3:
-                st.metric("Registros históricos", f"{len(df):,}")
+        if not hist_mes_dia_ref.empty:
+            hist_ref = hist_mes_dia_ref
+            especificidad = "mes_dia"
+        elif not hist_dia_ref.empty:
+            hist_ref = hist_dia_ref
+            especificidad = "dia"
+        elif not hist_mes_ref.empty:
+            hist_ref = hist_mes_ref
+            especificidad = "mes"
         else:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Atracciones disponibles", len(atracciones))
-            with col2:
-                st.metric("Zonas del parque", len(zonas))
+            hist_ref = pd.DataFrame()
+            especificidad = "global"
+    
+    # Calcular estadísticas del histórico más específico disponible
+    if not hist_ref.empty:
+        p75_hist = hist_ref["tiempo_espera"].quantile(0.75)
+        median_hist = hist_ref["tiempo_espera"].median()
+        p90_hist = hist_ref["tiempo_espera"].quantile(0.90)
+        count_hist = len(hist_ref)
+    else:
+        p75_hist = global_median
+        median_hist = global_median
+        p90_hist = global_median
+        count_hist = 0
+    
+    # Determinar tipo de hora del día
+    es_hora_apertura = (hora_int >= 10 and hora_int < 11)
+    es_hora_pico = (hora_int >= 11 and hora_int <= 16)
+    es_hora_valle = (hora_int < 10 or hora_int > 18)
+    
+    # Detectar puente/festivo
+    es_puente_val = es_puente(fecha)
+    
+    # PRIORIZAR históricos por hora - si tenemos datos específicos por hora, usarlos directamente
+    # Si tenemos histórico por hora específica, usarlo como base principal
+    if especificidad in ["mes_hora_dia", "hora_dia", "mes_hora", "hora"]:
+        # Tenemos datos por hora - usar histórico como base y ajustar con modelo
+        if not hist_ref.empty:
+            # Usar percentil 50 (mediana) o 75 según contexto
+            if es_hora_apertura:
+                # Hora de apertura: usar percentil más bajo (25 o mediana)
+                hist_base = hist_ref["tiempo_espera"].quantile(0.25) if len(hist_ref) > 10 else median_hist
+                peso_historico = 0.80  # Más peso al histórico en apertura
+                peso_modelo = 0.20
+            elif es_hora_pico:
+                # Hora pico: usar percentil 75
+                hist_base = p75_hist
+                # DETECTAR HISTÓRICOS SOSPECHOSAMENTE BAJOS
+                # Si el histórico es muy bajo para hora pico, buscar alternativas
+                if p75_hist < 15 and count_hist < 20:  # Histórico sospechosamente bajo
+                    # Buscar histórico menos específico pero más confiable
+                    hist_mes_dia_alt = df_train[(df_train["atraccion"] == atr) & (df_train["mes"] == mes) & (df_train["dia_semana_num"] == dia_semana)]
+                    hist_mes_alt = df_train[(df_train["atraccion"] == atr) & (df_train["mes"] == mes)]
+                    
+                    if not hist_mes_dia_alt.empty:
+                        p75_alt = hist_mes_dia_alt["tiempo_espera"].quantile(0.75)
+                        if p75_alt > p75_hist:
+                            hist_base = p75_alt
+                            especificidad = "mes_dia_fallback"
+                    elif not hist_mes_alt.empty:
+                        p75_alt = hist_mes_alt["tiempo_espera"].quantile(0.75)
+                        if p75_alt > p75_hist:
+                            hist_base = p75_alt
+                            especificidad = "mes_fallback"
+                    
+                    # Si aún es bajo, confiar más en el modelo
+                    if hist_base < 15:
+                        peso_historico = 0.30
+                        peso_modelo = 0.70
+                    else:
+                        peso_historico = 0.50
+                        peso_modelo = 0.50
+                else:
+                    peso_historico = 0.70
+                    peso_modelo = 0.30
+            else:
+                # Hora valle: usar mediana
+                hist_base = median_hist
+                peso_historico = 0.75
+                peso_modelo = 0.25
+        else:
+            hist_base = median_hist
+            peso_historico = 0.60
+            peso_modelo = 0.40
+    else:
+        # No tenemos datos por hora - usar modelo más y ajustar con histórico general
+        hist_base = p75_hist if es_hora_pico else median_hist
+        peso_historico = 0.40
+        peso_modelo = 0.60
+    
+    # Calcular predicción base combinada
+    pred_combinada = pred_base * peso_modelo + hist_base * peso_historico
+    
+    # AJUSTES ESPECIALES POR CONTEXTO
+    if es_hora_apertura:
+        # HORA DE APERTURA: Reducir significativamente (el parque acaba de abrir)
+        if es_fin_de_semana:
+            minutos_final = pred_combinada * 0.50  # Reducción del 50% en fin de semana
+        else:
+            minutos_final = pred_combinada * 0.60  # Reducción del 40% en laborable
+        ajuste = f"apertura_{especificidad}"
+    elif "Batman" in atr and mes == 10:
+        # Batman octubre: boost especial más agresivo, especialmente en fin de semana
+        if es_fin_de_semana:
+            # Fin de semana en octubre (sábado o domingo) - boost muy agresivo
+            if es_hora_pico:
+                # Hora pico + fin de semana + octubre = máximo boost
+                # Si el histórico es sospechosamente bajo, confiar más en el modelo base
+                if p75_hist < 15 or hist_base < 15:
+                    # Histórico bajo: usar modelo base con boost agresivo
+                    minutos_final = max(pred_base * 1.50, pred_combinada * 1.40, 25.0)  # Mínimo 25 minutos
+                else:
+                    # Histórico confiable: combinar modelo e histórico
+                    minutos_final = max(pred_combinada * 1.30, p75_hist * 1.25, hist_base * 1.35, pred_base * 1.25)
+            else:
+                # Fin de semana pero no hora pico
+                if hist_base < 10:
+                    minutos_final = max(pred_base * 1.30, pred_combinada * 1.20, 15.0)
+                else:
+                    minutos_final = max(pred_combinada * 1.20, hist_base * 1.25)
+        else:
+            # Día laborable en octubre
+            if es_hora_pico:
+                if hist_base < 15:
+                    minutos_final = max(pred_base * 1.35, pred_combinada * 1.25, 20.0)
+                else:
+                    minutos_final = max(pred_combinada * 1.15, hist_base * 1.20)
+            else:
+                minutos_final = max(pred_combinada * 1.10, hist_base * 1.15)
+        ajuste = f"batman_octubre_{'fin_semana' if es_fin_de_semana else 'laborable'}_{especificidad}"
+    elif es_puente_val:
+        # PUENTE: Aumentar afluencia (especialmente si es fin de semana)
+        if es_fin_de_semana:
+            minutos_final = pred_combinada * 1.15
+        else:
+            minutos_final = pred_combinada * 1.10
+        ajuste = f"puente_{especificidad}"
+    elif mes == 10 and dia_semana == 6:  # Octubre Domingo
+        if es_hora_pico:
+            minutos_final = pred_combinada * 1.10
+        else:
+            minutos_final = pred_combinada
+        ajuste = f"octubre_domingo_{especificidad}"
+    elif mes == 11 and dia_semana == 6:  # Noviembre Domingo
+        if es_hora_pico:
+            minutos_final = pred_combinada * 1.08
+        else:
+            minutos_final = pred_combinada
+        ajuste = f"noviembre_domingo_{especificidad}"
+    elif es_hora_pico:
+        # Hora pico en general
+        minutos_final = pred_combinada * 1.05
+        ajuste = f"hora_pico_{especificidad}"
+    elif es_hora_valle:
+        # Hora valle - menos afluencia
+        minutos_final = pred_combinada * 0.90
+        ajuste = f"hora_valle_{especificidad}"
+    elif es_fin_de_semana:
+        minutos_final = pred_combinada
+        ajuste = f"fin_semana_{especificidad}"
+    else:
+        minutos_final = pred_combinada
+        ajuste = f"laborable_{especificidad}"
+    
+    # Asegurar límites razonables
+    minutos_final = max(5, min(180, minutos_final))
+    
+    return {
+        "minutos_predichos": round(minutos_final, 1),
+        "prediccion_base": round(pred_base, 1),
+        "p75_historico": round(p75_hist, 1),
+        "median_historico": round(median_hist, 1),
+        "ajuste_aplicado": ajuste,
+        "especificidad_historico": especificidad,
+        "hora": round(hora, 2),
+        "hora_int": hora_int,
+        "es_hora_apertura": es_hora_apertura,
+        "es_hora_pico": es_hora_pico,
+        "es_hora_valle": es_hora_valle,
+        "es_puente": bool(es_puente_val),
+        "es_batman_octubre": ("Batman" in atr and mes == 10),
+        "mes": mes,
+        "dia_mes": dia_mes,
+        "dia_semana": ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][dia_semana],
+        "es_fin_de_semana": bool(es_fin_de_semana),
+        "count_historico": count_hist
+    }
 
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; color: var(--text-color); opacity: 0.7; padding: 1.5rem 0;">
-        🎢 ParkBeat — Predicción de tiempos de espera en Parque Warner<br>
-        <small>Desarrollado con ❤️ por Sergio López | v1.0</small>
-    </div>
-    """, unsafe_allow_html=True)
-
+# Ejemplo de uso
 if __name__ == "__main__":
-    main()
+    print("=" * 70)
+    print("🎯 EJEMPLO DE PREDICCIÓN")
+    print("=" * 70)
+    
+    # Cargar artefactos una vez
+    artifacts = load_model_artifacts()
+    
+    # Ejemplos de predicción
+    tests = [
+        {
+            "name": "Batman Octubre Sábado",
+            "input": {
+                "temperatura": 22,
+                "humedad": 60,
+                "sensacion_termica": 22,
+                "codigo_clima": 3,
+                "hora": "12:15:00",
+                "zona": "DC Super Heroes World",
+                "atraccion": "Batman Gotham City Escape",
+                "fecha": "2025-10-25"
+            }
+        },
+        {
+            "name": "Batman Octubre Domingo",
+            "input": {
+                "temperatura": 22,
+                "humedad": 60,
+                "sensacion_termica": 22,
+                "codigo_clima": 3,
+                "hora": "12:15:00",
+                "zona": "DC Super Heroes World",
+                "atraccion": "Batman Gotham City Escape",
+                "fecha": "2025-10-26"
+            }
+        },
+        {
+            "name": "Batman Noviembre Sábado",
+            "input": {
+                "temperatura": 22,
+                "humedad": 60,
+                "sensacion_termica": 22,
+                "codigo_clima": 3,
+                "hora": "12:15:00",
+                "zona": "DC Super Heroes World",
+                "atraccion": "Batman Gotham City Escape",
+                "fecha": "2025-11-01"
+            }
+        },
+        {
+            "name": "Batman Noviembre Domingo",
+            "input": {
+                "temperatura": 22,
+                "humedad": 60,
+                "sensacion_termica": 22,
+                "codigo_clima": 3,
+                "hora": "12:15:00",
+                "zona": "DC Super Heroes World",
+                "atraccion": "Batman Gotham City Escape",
+                "fecha": "2025-11-02"
+            }
+        }
+    ]
+    
+    for test in tests:
+        res = predict_wait_time(test["input"], artifacts)
+        print(f"\n🎯 {test['name']}:")
+        print(f"   📅 Fecha: {test['input']['fecha']} ({res['dia_semana']}, día {res['dia_mes']})")
+        print(f"   🕐 Hora: {test['input']['hora']} (hora pico: {res['es_hora_pico']})")
+        print(f"   ⏱️  Predicción: {res['minutos_predichos']} minutos")
+        print(f"   🔢 Base modelo: {res['prediccion_base']} minutos")
+        print(f"   📊 P75 histórico: {res['p75_historico']} minutos")
+        print(f"   🎯 Ajuste: {res['ajuste_aplicado']}")
+        print(f"   📈 Especificidad: {res['especificidad_historico']}")
+    
+    # Test adicional: mostrar cómo cambia con diferentes horas
+    print("\n" + "=" * 70)
+    print("🕐 TEST DE VARIACIÓN POR HORA (Mismo día)")
+    print("=" * 70)
+    
+    test_horas = [
+        {"hora": "10:00:00", "name": "10:00 (Valle)"},
+        {"hora": "12:00:00", "name": "12:00 (Pico)"},
+        {"hora": "15:00:00", "name": "15:00 (Pico)"},
+        {"hora": "18:00:00", "name": "18:00 (Valle)"},
+        {"hora": "20:00:00", "name": "20:00 (Valle)"}
+    ]
+    
+    for test_hora in test_horas:
+        input_test = {
+            "temperatura": 22,
+            "humedad": 60,
+            "sensacion_termica": 22,
+            "codigo_clima": 3,
+            "hora": test_hora["hora"],
+            "zona": "DC Super Heroes World",
+            "atraccion": "Batman Gotham City Escape",
+            "fecha": "2025-11-02"  # Domingo
+        }
+        res = predict_wait_time(input_test, artifacts)
+        print(f"\n🕐 {test_hora['name']}:")
+        print(f"   ⏱️  Predicción: {res['minutos_predichos']} min (Base: {res['prediccion_base']:.1f} min)")
+        print(f"   📊 Histórico: {res['p75_historico']:.1f} min ({res['especificidad_historico']})")
+    
+    # Test adicional: mostrar cómo cambia con diferentes días del mes
+    print("\n" + "=" * 70)
+    print("📅 TEST DE VARIACIÓN POR DÍA DEL MES (Mismo mes y día de semana)")
+    print("=" * 70)
+    
+    test_dias = [
+        {"fecha": "2025-11-02", "name": "Domingo 2 Nov"},
+        {"fecha": "2025-11-09", "name": "Domingo 9 Nov"},
+        {"fecha": "2025-11-16", "name": "Domingo 16 Nov"},
+        {"fecha": "2025-11-23", "name": "Domingo 23 Nov"},
+        {"fecha": "2025-11-30", "name": "Domingo 30 Nov"}
+    ]
+    
+    for test_dia in test_dias:
+        input_test = {
+            "temperatura": 22,
+            "humedad": 60,
+            "sensacion_termica": 22,
+            "codigo_clima": 3,
+            "hora": "12:00:00",
+            "zona": "DC Super Heroes World",
+            "atraccion": "Batman Gotham City Escape",
+            "fecha": test_dia["fecha"]
+        }
+        res = predict_wait_time(input_test, artifacts)
+        print(f"\n📅 {test_dia['name']} (día {res['dia_mes']}):")
+        print(f"   ⏱️  Predicción: {res['minutos_predichos']} min (Base: {res['prediccion_base']:.1f} min)")
+        print(f"   📊 Histórico: {res['p75_historico']:.1f} min ({res['especificidad_historico']})")
+
