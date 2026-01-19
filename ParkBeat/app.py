@@ -212,7 +212,7 @@ def render_hero():
 
 def render_sidebar():
     with st.sidebar:
-        st.title("🎢 ParkBeat")
+        st.title("ParkBeat")
         st.markdown("---")
         
         try:
@@ -231,53 +231,53 @@ def render_sidebar():
         
         menu_option = st.radio(
             "",
-            ["Inicio", "🤔 ¿Qué es ParkBeat?", "💡 ¿Por qué este proyecto?", "📊 Acerca de los datos"],
+            ["Inicio", " ¿Qué es ParkBeat?", " ¿Por qué este proyecto?", " Acerca de los datos"],
             label_visibility="collapsed"
         )
         
         st.markdown("---")
         
-        if menu_option == "🤔 ¿Qué es ParkBeat?":
+        if menu_option == " ¿Qué es ParkBeat?":
             st.markdown("""
-            ### 🤔 ¿Qué es ParkBeat?
+            ###  ¿Qué es ParkBeat?
             
             **ParkBeat** es una plataforma de predicción inteligente de tiempos de espera para atracciones en **Parque Warner Madrid**.
             
             **Características principales:**
             
-            ✅ **Predicciones precisas** basadas en datos históricos  
-            🌤️ **Factores meteorológicos** incluidos en el modelo  
-            ⏰ **Análisis temporal** por fecha y hora específicas  
-            🎢 **Cobertura completa** de todas las atracciones  
+             **Predicciones precisas** basadas en datos históricos  
+             **Factores meteorológicos** incluidos en el modelo  
+             **Análisis temporal** por fecha y hora específicas  
+             **Cobertura completa** de todas las atracciones  
             
             **Objetivo:** Ayudar a los visitantes a planificar mejor su día en el parque y maximizar su experiencia.
             """)
             
-        elif menu_option == "💡 ¿Por qué este proyecto?":
+        elif menu_option == " ¿Por qué este proyecto?":
             st.markdown("""
-            ### 💡 ¿Por qué este proyecto?
+            ###  ¿Por qué este proyecto?
     
             Soy un apasionado de los parques temáticos desde que tengo memoria, y mejorar la experiencia del visitante, especialmente en aspectos como los tiempos de espera, es lo que realmente me inspira.  
             Desde 2007 (primera vez que visité el parque), Parque Warner ha sido una parte fundamental de mi vida. Podría decirse que he crecido junto a él, y con el tiempo, mi amor por el parque se ha fusionado con mi pasión por el análisis de datos, lo que ha dado lugar a la creación de ParkBeat.
     
             **Las tecnologías que he utilizado son las siguientes:**
     
-            - 🤖 **Machine Learning** con Python  
-            - 📊 **Análisis de datos** con Pandas y NumPy  
-            - 📈 **Visualización** con Plotly  
-            - 🚀 **Despliegue** con Streamlit  
-            - ☁️ **Modelos en producción** con AWS Lambda
+            -  **Machine Learning** con Python  
+            -  **Análisis de datos** con Pandas y NumPy  
+            -  **Visualización** con Plotly  
+            -  **Despliegue** con Streamlit  
+            -  **Modelos en producción** con AWS Lambda
             """)
             
-        elif menu_option == "📊 Acerca de los datos":
+        elif menu_option == " Acerca de los datos":
             st.markdown("""
-            ### 📊 Acerca de los datos
+            ###  Acerca de los datos
             
             **Fuente de datos:**
             
-            📥 - **Histórico** de tiempos de espera reales (Ingesta de datos mediante API Queue-Times) 
-            🌦️ - **Datos meteorológicos** en tiempo real  
-            🎢 - **Información** específica de cada atracción  
+             - **Histórico** de tiempos de espera reales (Ingesta de datos mediante API Queue-Times) 
+             - **Datos meteorológicos** en tiempo real  
+             - **Información** específica de cada atracción  
           
             
             **Procesamiento:**
@@ -317,7 +317,7 @@ def main():
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    ## 🎯 Bienvenido a ParkBeat
+    ## Bienvenido a ParkBeat
     
     Predice los tiempos de espera en las atracciones del Parque Warner Madrid con precisión. 
     Simplemente selecciona una atracción, la fecha y la hora de tu visita, y te mostraremos una 
@@ -336,17 +336,7 @@ def main():
             elif isinstance(artifacts, dict):
                 df = artifacts.get("df_processed", pd.DataFrame())
                 
-                # Verificar que el DataFrame tenga datos y las columnas necesarias
-                if df.empty:
-                    st.warning("⚠️ No se encontraron datos de entrenamiento. Usando listas limitadas.")
-                    st.info("💡 Verifica que el modelo se haya entrenado correctamente y que los archivos estén en la ubicación correcta.")
-                elif "atraccion" not in df.columns or "zona" not in df.columns:
-                    st.warning(f"⚠️ El DataFrame no tiene las columnas necesarias. Usando listas limitadas.")
-                    st.info(f"💡 Columnas encontradas: {list(df.columns)}")
-                    df = pd.DataFrame()
-            else:
-                st.warning("⚠️ Los artefactos no tienen el formato esperado. Usando listas limitadas.")
-                df = pd.DataFrame()
+              
                 
         except Exception as e:
             st.warning(f"⚠️ Error al cargar el modelo: {str(e)}")
@@ -460,7 +450,7 @@ def main():
     atracciones = get_attractions()
     zonas = get_zones()
 
-    st.markdown("## ⚙️ Configura tu predicción")
+    st.markdown("##  Configura tu predicción")
     
     col1, col2 = st.columns(2)
     
