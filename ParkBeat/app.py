@@ -722,40 +722,7 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
 
-                    st.markdown("### 📊 Comparación de predicciones")
-                    valores = {
-                        "Predicción Final": minutos_pred,
-                        "Modelo Base": resultado.get('prediccion_raw', resultado.get('prediccion_base', minutos_pred)),
-                        "P75 Histórico": resultado.get('p75_historico', 0),
-                        "Mediana": resultado.get('median_historico', 0)
-                    }
                     
-                    # Filtrar valores válidos
-                    valores = {k: v for k, v in valores.items() if v > 0}
-                    
-                    if valores:
-                        fig = go.Figure(go.Bar(
-                            x=list(valores.keys()),
-                            y=list(valores.values()),
-                            text=[f"{v:.1f} min" for v in valores.values()],
-                            textposition='auto',
-                            marker_color=['#6c63ff', '#4facfe', '#43e97b', '#f6d365'][:len(valores)]
-                        ))
-                        
-                        fig.update_layout(
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            height=400,
-                            margin=dict(t=20, b=20, l=20, r=20),
-                            yaxis_title="Minutos",
-                            xaxis_title="",
-                            showlegend=False,
-                            font=dict(color='var(--text-color)'),
-                            xaxis=dict(tickfont=dict(color='var(--text-color)')),
-                            yaxis=dict(gridcolor='var(--border-color)')
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
 
                 with tab3:
                     st.markdown("### 💡 Recomendaciones")
