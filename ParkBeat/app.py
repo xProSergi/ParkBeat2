@@ -325,73 +325,33 @@ def main():
     """)
     
     # Cargar modelo SOLO para obtener listas de atracciones/zonas
-    with st.spinner("Cargando datos..."):
+    with st.spinner("Cargando modelo y datos..."):
         try:
             artifacts = load_model_artifacts()
-            if artifacts and isinstance(artifacts, dict) and "df_processed" in artifacts:
-                df = artifacts.get("df_processed", pd.DataFrame())
-                # Verificar que el DataFrame tiene datos y las columnas necesarias
-                if df.empty or "atraccion" not in df.columns or "zona" not in df.columns:
-                    st.warning("⚠️ Los datos cargados no tienen el formato esperado. Usando listas limitadas.")
-                    df = pd.DataFrame()
-            else:
-                st.warning("⚠️ No se pudieron cargar los artefactos locales. Las listas pueden estar limitadas.")
-                df = pd.DataFrame()
+            if not artifacts or "error" in str(artifacts).lower():
+                st.error("❌ Error al cargar el modelo. Por favor, verifica los archivos del modelo.")
+                st.stop()
+                
+            df = artifacts.get("df_processed", pd.DataFrame())
+            if df.empty:
+                st.error("❌ No se encontraron datos de entrenamiento.")
+                st.stop()
+                
         except Exception as e:
-            st.warning(f"⚠️ No se pudieron cargar los artefactos locales: {str(e)}")
-            df = pd.DataFrame()
+            st.error(f"❌ Error al cargar el modelo: {str(e)}")
+            st.stop()
 
     @st.cache_data
     def get_attractions():
-        if not df.empty and "atraccion" in df.columns:
-            return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
-        else:
-            # Lista fallback si no hay datos
-            return [
-                "Batman Gotham City Escape",
-                "Superman: La Atracción de Acero",
-                "La Venganza del Enigma",
-                "Stunt Fall",
-                "Coaster Express",
-                "Río Bravo",
-                "Correcaminos Bip, Bip",
-                "Tom & Jerry",
-                "Hotel Embrujado",
-                "Wild West Waterworks"
-            ]
+        return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
 
     @st.cache_data
     def get_zones():
-        if not df.empty and "zona" in df.columns:
-            return sorted(df["zona"].dropna().astype(str).unique().tolist())
-        else:
-            return [
-                "DC Super Heroes World",
-                "Old West Territory",
-                "Cartoon Village",
-                "Hollywood Boulevard",
-                "Medieval Territory"
-            ]
+        return sorted(df["zona"].dropna().astype(str).unique().tolist())
 
     def get_zone_for_attraction(attraction):
-        if not df.empty and "atraccion" in df.columns and "zona" in df.columns:
-            row = df[df["atraccion"] == attraction]
-            return row["zona"].iloc[0] if not row.empty else ""
-        else:
-            # Mapeo fallback
-            zone_map = {
-                "Batman Gotham City Escape": "DC Super Heroes World",
-                "Superman: La Atracción de Acero": "DC Super Heroes World",
-                "La Venganza del Enigma": "DC Super Heroes World",
-                "Stunt Fall": "Old West Territory",
-                "Coaster Express": "Old West Territory",
-                "Río Bravo": "Old West Territory",
-                "Correcaminos Bip, Bip": "Cartoon Village",
-                "Tom & Jerry": "Cartoon Village",
-                "Hotel Embrujado": "Hollywood Boulevard",
-                "Wild West Waterworks": "Old West Territory"
-            }
-            return zone_map.get(attraction, "")
+        row = df[df["atraccion"] == attraction]
+        return row["zona"].iloc[0] if not row.empty else ""
 
     atracciones = get_attractions()
     zonas = get_zones()
@@ -748,10 +708,10 @@ def main():
         
         ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
         
- 
+      
         """)
         
-       
+      
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: var(--text-color); opacity: 0.7; padding: 1.5rem 0;">
