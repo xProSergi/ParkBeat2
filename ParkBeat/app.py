@@ -742,26 +742,10 @@ def main():
         
         ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
         
-        ### 📈 Estadísticas rápidas
+        
         """)
         
-        if not df.empty:
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Atracciones disponibles", len(atracciones))
-            
-            with col2:
-                st.metric("Zonas del parque", len(zonas))
-            
-            with col3:
-                st.metric("Registros históricos", f"{len(df):,}")
-        else:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Atracciones disponibles", len(atracciones))
-            with col2:
-                st.metric("Zonas del parque", len(zonas))
+        
 
     st.markdown("---")
     st.markdown("""
