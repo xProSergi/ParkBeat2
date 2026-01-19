@@ -328,30 +328,82 @@ def main():
     with st.spinner("Cargando modelo y datos..."):
         try:
             artifacts = load_model_artifacts()
-            if not artifacts or "error" in str(artifacts).lower():
-                st.error("❌ Error al cargar el modelo. Por favor, verifica los archivos del modelo.")
-                st.stop()
+            
+            # Verificar si artifacts es válido
+            if not artifacts:
+                st.warning("⚠️ No se pudieron cargar los artefactos. Usando listas limitadas.")
+                df = pd.DataFrame()
+            elif isinstance(artifacts, dict):
+                df = artifacts.get("df_processed", pd.DataFrame())
                 
-            df = artifacts.get("df_processed", pd.DataFrame())
-            if df.empty:
-                st.error("❌ No se encontraron datos de entrenamiento.")
-                st.stop()
+                # Verificar que el DataFrame tenga datos y las columnas necesarias
+                if df.empty:
+                    st.warning("⚠️ No se encontraron datos de entrenamiento. Usando listas limitadas.")
+                    st.info("💡 Verifica que el modelo se haya entrenado correctamente y que los archivos estén en la ubicación correcta.")
+                elif "atraccion" not in df.columns or "zona" not in df.columns:
+                    st.warning(f"⚠️ El DataFrame no tiene las columnas necesarias. Usando listas limitadas.")
+                    st.info(f"💡 Columnas encontradas: {list(df.columns)}")
+                    df = pd.DataFrame()
+            else:
+                st.warning("⚠️ Los artefactos no tienen el formato esperado. Usando listas limitadas.")
+                df = pd.DataFrame()
                 
         except Exception as e:
-            st.error(f"❌ Error al cargar el modelo: {str(e)}")
-            st.stop()
+            st.warning(f"⚠️ Error al cargar el modelo: {str(e)}")
+            st.info("💡 La aplicación continuará con listas limitadas de atracciones.")
+            df = pd.DataFrame()
 
     @st.cache_data
     def get_attractions():
-        return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
+        if not df.empty and "atraccion" in df.columns:
+            return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
+        else:
+            # Lista fallback si no hay datos
+            return [
+                "Batman Gotham City Escape",
+                "Superman: La Atracción de Acero",
+                "La Venganza del Enigma",
+                "Stunt Fall",
+                "Coaster Express",
+                "Río Bravo",
+                "Correcaminos Bip, Bip",
+                "Tom & Jerry",
+                "Hotel Embrujado",
+                "Wild West Waterworks"
+            ]
 
     @st.cache_data
     def get_zones():
-        return sorted(df["zona"].dropna().astype(str).unique().tolist())
+        if not df.empty and "zona" in df.columns:
+            return sorted(df["zona"].dropna().astype(str).unique().tolist())
+        else:
+            return [
+                "DC Super Heroes World",
+                "Old West Territory",
+                "Cartoon Village",
+                "Hollywood Boulevard",
+                "Medieval Territory"
+            ]
 
     def get_zone_for_attraction(attraction):
-        row = df[df["atraccion"] == attraction]
-        return row["zona"].iloc[0] if not row.empty else ""
+        if not df.empty and "atraccion" in df.columns and "zona" in df.columns:
+            row = df[df["atraccion"] == attraction]
+            return row["zona"].iloc[0] if not row.empty else ""
+        else:
+            # Mapeo fallback
+            zone_map = {
+                "Batman Gotham City Escape": "DC Super Heroes World",
+                "Superman: La Atracción de Acero": "DC Super Heroes World",
+                "La Venganza del Enigma": "DC Super Heroes World",
+                "Stunt Fall": "Old West Territory",
+                "Coaster Express": "Old West Territory",
+                "Río Bravo": "Old West Territory",
+                "Correcaminos Bip, Bip": "Cartoon Village",
+                "Tom & Jerry": "Cartoon Village",
+                "Hotel Embrujado": "Hollywood Boulevard",
+                "Wild West Waterworks": "Old West Territory"
+            }
+            return zone_map.get(attraction, "")
 
     atracciones = get_attractions()
     zonas = get_zones()
@@ -708,10 +760,27 @@ def main():
         
         ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
         
-      
+        ### 📈 Estadísticas rápidas
         """)
         
-      
+        if not df.empty:
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Atracciones disponibles", len(atracciones))
+            
+            with col2:
+                st.metric("Zonas del parque", len(zonas))
+            
+            with col3:
+                st.metric("Registros históricos", f"{len(df):,}")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Atracciones disponibles", len(atracciones))
+            with col2:
+                st.metric("Zonas del parque", len(zonas))
+
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: var(--text-color); opacity: 0.7; padding: 1.5rem 0;">
