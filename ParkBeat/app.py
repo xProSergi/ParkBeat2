@@ -325,20 +325,32 @@ def main():
     """)
     
     # Cargar modelo SOLO para obtener listas de atracciones/zonas
-    with st.spinner("Cargando datos..."):
+    with st.spinner("Cargando modelo y datos..."):
         try:
             artifacts = load_model_artifacts()
-            if artifacts and isinstance(artifacts, dict) and "df_processed" in artifacts:
+            
+            # Verificar si artifacts es válido
+            if not artifacts:
+                st.warning("⚠️ No se pudieron cargar los artefactos. Usando listas limitadas.")
+                df = pd.DataFrame()
+            elif isinstance(artifacts, dict):
                 df = artifacts.get("df_processed", pd.DataFrame())
-                # Verificar que el DataFrame tiene datos y las columnas necesarias
-                if df.empty or "atraccion" not in df.columns or "zona" not in df.columns:
-                    st.warning("⚠️ Los datos cargados no tienen el formato esperado. Usando listas limitadas.")
+                
+                # Verificar que el DataFrame tenga datos y las columnas necesarias
+                if df.empty:
+                    st.warning("⚠️ No se encontraron datos de entrenamiento. Usando listas limitadas.")
+                    st.info("💡 Verifica que el modelo se haya entrenado correctamente y que los archivos estén en la ubicación correcta.")
+                elif "atraccion" not in df.columns or "zona" not in df.columns:
+                    st.warning(f"⚠️ El DataFrame no tiene las columnas necesarias. Usando listas limitadas.")
+                    st.info(f"💡 Columnas encontradas: {list(df.columns)}")
                     df = pd.DataFrame()
             else:
-                st.warning("⚠️ No se pudieron cargar los artefactos locales. Las listas pueden estar limitadas.")
+                st.warning("⚠️ Los artefactos no tienen el formato esperado. Usando listas limitadas.")
                 df = pd.DataFrame()
+                
         except Exception as e:
-            st.warning(f"⚠️ No se pudieron cargar los artefactos locales: {str(e)}")
+            st.warning(f"⚠️ Error al cargar el modelo: {str(e)}")
+            st.info("💡 La aplicación continuará con listas limitadas de atracciones.")
             df = pd.DataFrame()
 
     @st.cache_data
@@ -346,18 +358,41 @@ def main():
         if not df.empty and "atraccion" in df.columns:
             return sorted(df["atraccion"].dropna().astype(str).unique().tolist())
         else:
-            # Lista fallback si no hay datos
+            # Lista fallback con nombres exactos de la API Queue-Times
             return [
+                "A Toda Máquina",
+                "Academia de Pilotos Baby Looney Tunes",
                 "Batman Gotham City Escape",
-                "Superman: La Atracción de Acero",
-                "La Venganza del Enigma",
-                "Stunt Fall",
+                "Cartoon Carousel",
+                "Cataratas Salvajes",
+                "Cine Tour",
                 "Coaster Express",
-                "Río Bravo",
-                "Correcaminos Bip, Bip",
-                "Tom & Jerry",
+                "Convoy de Camiones",
+                "Correcaminos Bip Bip",
+                "Emergencias Pato Lucas",
+                "Escuela de Conducción Yabba-Dabba-Doo",
+                "He Visto un Lindo Gatito",
                 "Hotel Embrujado",
-                "Wild West Waterworks"
+                "La Aventura de Scooby-Doo",
+                "La Captura de Gossamer",
+                "La Venganza del Enigma",
+                "Lex Luthor Invertatron",
+                "Looney Tunes Correo Aéreo",
+                "Los Carros de la Mina",
+                "Marvin el Marciano Cohetes Espaciales",
+                "Mr. Freeze Fábrica de Hielo",
+                "Oso Yogui",
+                "Pato Lucas Coches Locos",
+                "Piolín y Silvestre Paseo en Autobús",
+                "Rápidos ACME",
+                "Río Bravo",
+                "Scooby-Doo's Tea Party Mistery",
+                "Shadows of Arkham",
+                "Stunt Fall",
+                "Superman La Atracción de Acero",
+                "The Joker Coches de Choque",
+                "Tom & Jerry Picnic en el Parque",
+                "Wile E. Coyote Zona de Explosión"
             ]
 
     @st.cache_data
@@ -366,11 +401,11 @@ def main():
             return sorted(df["zona"].dropna().astype(str).unique().tolist())
         else:
             return [
-                "DC Super Heroes World",
-                "Old West Territory",
                 "Cartoon Village",
-                "Hollywood Boulevard",
-                "Medieval Territory"
+                "DC Super Heroes World",
+                "Movie World Studios",
+                "Old West Territory",
+                "Warner Beach"
             ]
 
     def get_zone_for_attraction(attraction):
@@ -378,18 +413,47 @@ def main():
             row = df[df["atraccion"] == attraction]
             return row["zona"].iloc[0] if not row.empty else ""
         else:
-            # Mapeo fallback
+            # Mapeo fallback con nombres exactos de la API Queue-Times
             zone_map = {
+                # Cartoon Village
+                "A Toda Máquina": "Cartoon Village",
+                "Academia de Pilotos Baby Looney Tunes": "Cartoon Village",
+                "Cartoon Carousel": "Cartoon Village",
+                "Convoy de Camiones": "Cartoon Village",
+                "Correcaminos Bip Bip": "Cartoon Village",
+                "Emergencias Pato Lucas": "Cartoon Village",
+                "Escuela de Conducción Yabba-Dabba-Doo": "Cartoon Village",
+                "He Visto un Lindo Gatito": "Cartoon Village",
+                "La Aventura de Scooby-Doo": "Cartoon Village",
+                "La Captura de Gossamer": "Cartoon Village",
+                "Looney Tunes Correo Aéreo": "Cartoon Village",
+                "Marvin el Marciano Cohetes Espaciales": "Cartoon Village",
+                "Pato Lucas Coches Locos": "Cartoon Village",
+                "Piolín y Silvestre Paseo en Autobús": "Cartoon Village",
+                "Rápidos ACME": "Cartoon Village",
+                "Scooby-Doo's Tea Party Mistery": "Cartoon Village",
+                "Tom & Jerry Picnic en el Parque": "Cartoon Village",
+                "Wile E. Coyote Zona de Explosión": "Cartoon Village",
+                # DC Super Heroes World
                 "Batman Gotham City Escape": "DC Super Heroes World",
-                "Superman: La Atracción de Acero": "DC Super Heroes World",
                 "La Venganza del Enigma": "DC Super Heroes World",
-                "Stunt Fall": "Old West Territory",
+                "Lex Luthor Invertatron": "DC Super Heroes World",
+                "Mr. Freeze Fábrica de Hielo": "DC Super Heroes World",
+                "Shadows of Arkham": "DC Super Heroes World",
+                "Superman La Atracción de Acero": "DC Super Heroes World",
+                "The Joker Coches de Choque": "DC Super Heroes World",
+                # Movie World Studios
+                "Cine Tour": "Movie World Studios",
+                "Hotel Embrujado": "Movie World Studios",
+                "Oso Yogui": "Movie World Studios",
+                "Stunt Fall": "Movie World Studios",
+                # Old West Territory
+                "Cataratas Salvajes": "Old West Territory",
                 "Coaster Express": "Old West Territory",
+                "Los Carros de la Mina": "Old West Territory",
                 "Río Bravo": "Old West Territory",
-                "Correcaminos Bip, Bip": "Cartoon Village",
-                "Tom & Jerry": "Cartoon Village",
-                "Hotel Embrujado": "Hollywood Boulevard",
-                "Wild West Waterworks": "Old West Territory"
+                # Warner Beach
+                
             }
             return zone_map.get(attraction, "")
 
@@ -748,10 +812,27 @@ def main():
         
         ¡Obtendrás una predicción precisa basada en datos históricos y condiciones actuales!
         
- 
+        ### 📈 Estadísticas rápidas
         """)
         
-       
+        if not df.empty:
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Atracciones disponibles", len(atracciones))
+            
+            with col2:
+                st.metric("Zonas del parque", len(zonas))
+            
+            with col3:
+                st.metric("Registros históricos", f"{len(df):,}")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Atracciones disponibles", len(atracciones))
+            with col2:
+                st.metric("Zonas del parque", len(zonas))
+
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: var(--text-color); opacity: 0.7; padding: 1.5rem 0;">
